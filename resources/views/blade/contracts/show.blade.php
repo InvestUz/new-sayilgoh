@@ -3,7 +3,7 @@
 @section('header', $contract->shartnoma_raqami)
 @section('subheader', 'Shartnoma tafsilotlari')
 @section('header-actions')
-<a href="{{ route('payments.create', ['contract_id' => $contract->id]) }}" class="btn btn-primary">
+<a href="{{ route('registry.payments.create', ['contract_id' => $contract->id]) }}" class="btn btn-primary">
     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
     To'lov qo'shish
 </a>
@@ -225,7 +225,7 @@ function formatSumShow($num) {
                 <svg class="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
             </div>
             <p class="font-medium text-gray-500">Hali to'lovlar yo'q</p>
-            <a href="{{ route('payments.create', ['contract_id' => $contract->id]) }}" class="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
+            <a href="{{ route('registry.payments.create', ['contract_id' => $contract->id]) }}" class="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                 Birinchi to'lovni qo'shing
             </a>

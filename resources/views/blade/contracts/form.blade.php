@@ -10,7 +10,7 @@
         <div class="card mb-4">
             <div class="card-body flex items-center gap-3 text-[#f59e0b]">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01"/></svg>
-                <span>Shartnoma yaratish uchun avval <a href="{{ route('tenants.create') }}" class="underline text-[#38bdf8]">ijarachi</a> yarating.</span>
+                <span>Shartnoma yaratish uchun avval <a href="{{ route('registry.tenants.create') }}" class="underline text-[#38bdf8]">ijarachi</a> yarating.</span>
             </div>
         </div>
         @endif
@@ -19,13 +19,13 @@
         <div class="card mb-4">
             <div class="card-body flex items-center gap-3 text-[#f59e0b]">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01"/></svg>
-                <span>Bo'sh lotlar yo'q. <a href="{{ route('lots.create') }}" class="underline text-[#38bdf8]">Yangi lot yarating</a>.</span>
+                <span>Bo'sh lotlar yo'q. <a href="{{ route('registry.lots.create') }}" class="underline text-[#38bdf8]">Yangi lot yarating</a>.</span>
             </div>
         </div>
         @endif
     @endif
 
-    <form action="{{ isset($contract) ? route('contracts.update', $contract) : route('contracts.store') }}" method="POST" class="card">
+    <form action="{{ isset($contract) ? route('registry.contracts.update', $contract) : route('registry.contracts.store') }}" method="POST" class="card">
         @csrf
         @if(isset($contract)) @method('PUT') @endif
 
@@ -185,12 +185,12 @@
             @endif
 
             <div class="flex items-center justify-between pt-4 border-t border-[rgba(56,189,248,0.08)]">
-                <a href="{{ isset($contract) ? route('lots.show', $contract->lot) : route('lots.index') }}" class="text-[#64748b] hover:text-[#e2e8f0] text-sm flex items-center gap-1">
+                <a href="{{ isset($contract) ? route('registry.lots.show', $contract->lot) : route('registry', ['tab' => 'lots']) }}" class="text-[#64748b] hover:text-[#e2e8f0] text-sm flex items-center gap-1">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
                     Orqaga
                 </a>
                 <div class="flex gap-3">
-                    <a href="{{ isset($contract) ? route('lots.show', $contract->lot) : route('lots.index') }}" class="btn btn-secondary">Bekor qilish</a>
+                    <a href="{{ isset($contract) ? route('registry.lots.show', $contract->lot) : route('registry', ['tab' => 'lots']) }}" class="btn btn-secondary">Bekor qilish</a>
                     <button type="submit" class="btn btn-primary">{{ isset($contract) ? 'Saqlash' : 'Yaratish' }}</button>
                 </div>
             </div>

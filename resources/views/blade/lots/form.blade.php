@@ -5,7 +5,7 @@
 
 @section('content')
 <div class="max-w-4xl">
-    <form action="{{ isset($lot) ? route('lots.update', $lot) : route('lots.store') }}" method="POST" enctype="multipart/form-data" class="space-y-5">
+    <form action="{{ isset($lot) ? route('registry.lots.update', $lot) : route('registry.lots.store') }}" method="POST" enctype="multipart/form-data" class="space-y-5">
         @csrf
         @if(isset($lot)) @method('PUT') @endif
 
@@ -223,12 +223,12 @@
 
         <!-- Actions -->
         <div class="flex items-center justify-between pt-2">
-            <a href="{{ route('lots.index') }}" class="text-[#64748b] hover:text-[#e2e8f0] text-sm flex items-center gap-1">
+            <a href="{{ route('registry', ['tab' => 'lots']) }}" class="text-[#64748b] hover:text-[#e2e8f0] text-sm flex items-center gap-1">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
                 Orqaga
             </a>
             <div class="flex gap-3">
-                <a href="{{ route('lots.index') }}" class="btn btn-secondary">Bekor qilish</a>
+                <a href="{{ route('registry', ['tab' => 'lots']) }}" class="btn btn-secondary">Bekor qilish</a>
                 <button type="submit" class="btn btn-primary">Saqlash</button>
             </div>
         </div>

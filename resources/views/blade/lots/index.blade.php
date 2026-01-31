@@ -11,7 +11,7 @@ $hasFilters = (isset($filter) && $filter) || (isset($year) && $year);
 @endphp
 
 @section('header-actions')
-<a href="{{ route('lots.create') }}" class="btn btn-primary">
+<a href="{{ route('registry.lots.create') }}" class="btn btn-primary">
     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
     Yangi lot
 </a>
@@ -43,7 +43,7 @@ $hasFilters = (isset($filter) && $filter) || (isset($year) && $year);
                 </span>
                 @endif
             </div>
-            <a href="{{ route('lots.index') }}" class="btn btn-danger text-xs">
+            <a href="{{ route('registry', ['tab' => 'lots']) }}" class="btn btn-danger text-xs">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                 Tozalash
             </a>
@@ -110,7 +110,7 @@ $hasFilters = (isset($filter) && $filter) || (isset($year) && $year);
                     @endphp
                     <tr>
                         <td>
-                            <a href="{{ route('lots.show', $lot) }}" class="text-cyan font-medium hover:underline">{{ $lot->lot_raqami }}</a>
+                            <a href="{{ route('registry.lots.show', $lot) }}" class="text-cyan font-medium hover:underline">{{ $lot->lot_raqami }}</a>
                         </td>
                         <td>
                             <div>{{ $lot->obyekt_nomi }}</div>
@@ -118,7 +118,7 @@ $hasFilters = (isset($filter) && $filter) || (isset($year) && $year);
                         </td>
                         <td>
                             @if($contract && $contract->tenant)
-                            <a href="{{ route('tenants.show', $contract->tenant) }}" class="hover:text-[#38bdf8]">{{ $contract->tenant->name }}</a>
+                            <a href="{{ route('registry.tenants.show', $contract->tenant) }}" class="hover:text-[#38bdf8]">{{ $contract->tenant->name }}</a>
                             @else
                             <span class="text-[#64748b]">—</span>
                             @endif
@@ -150,8 +150,8 @@ $hasFilters = (isset($filter) && $filter) || (isset($year) && $year);
                             @endif
                         </td>
                         <td class="text-right">
-                            <a href="{{ route('lots.show', $lot) }}" class="text-[#38bdf8] hover:underline text-xs mr-2">Ko'rish</a>
-                            <a href="{{ route('lots.edit', $lot) }}" class="text-[#64748b] hover:text-white text-xs">Tahrir</a>
+                            <a href="{{ route('registry.lots.show', $lot) }}" class="text-[#38bdf8] hover:underline text-xs mr-2">Ko'rish</a>
+                            <a href="{{ route('registry.lots.edit', $lot) }}" class="text-[#64748b] hover:text-white text-xs">Tahrir</a>
                         </td>
                     </tr>
                     @empty

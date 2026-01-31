@@ -521,6 +521,56 @@ class WebController extends Controller
         return $data;
     }
 
+    // ==================== UNIFIED REGISTRY ====================
+    public function registryIndex(Request $request)
+    {
+        $tab = $request->get('tab', 'tenants');
+        $search = $request->get('search', '');
+
+        // Tenants
+        $tenantsQuery = Tenant::with('activeContracts');
+        if ($search) {
+            $tenantsQuery->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('inn', 'like', "%{$search}%")
+                  ->orWhere('phone', 'like', "%{$search}%");
+            });
+        }
+        $tenants = $tenantsQuery->latest()->paginate(20, ['*'], 'tenants_page')->withQueryString();
+
+        // Lots
+        $lotsQuery = Lot::with(['contracts' => function($q) {
+            $q->where('holat', 'faol')->with(['tenant', 'paymentSchedules']);
+        }]);
+        if ($search) {
+            $lotsQuery->where(function ($q) use ($search) {
+                $q->where('lot_raqami', 'like', "%{$search}%")
+                  ->orWhere('obyekt_nomi', 'like', "%{$search}%")
+                  ->orWhere('tuman', 'like', "%{$search}%");
+            });
+        }
+        $lots = $lotsQuery->latest()->paginate(20, ['*'], 'lots_page')->withQueryString();
+
+        // Payments
+        $paymentsQuery = Payment::with(['contract.tenant']);
+        if ($search) {
+            $paymentsQuery->where(function ($q) use ($search) {
+                $q->where('tolov_raqami', 'like', "%{$search}%")
+                  ->orWhereHas('contract.tenant', fn($tq) => $tq->where('name', 'like', "%{$search}%"));
+            });
+        }
+        $payments = $paymentsQuery->latest('tolov_sanasi')->paginate(20, ['*'], 'payments_page')->withQueryString();
+
+        // Counts for badges
+        $counts = [
+            'tenants' => Tenant::count(),
+            'lots' => Lot::count(),
+            'payments' => Payment::count(),
+        ];
+
+        return view('registry', compact('tenants', 'lots', 'payments', 'tab', 'search', 'counts'));
+    }
+
     // ==================== TENANTS ====================
     public function tenantsIndex(Request $request)
     {
@@ -590,7 +640,7 @@ class WebController extends Controller
         $validated['type'] = $validated['type'] ?? 'yuridik';
         Tenant::create($validated);
 
-        return redirect()->route('tenants.index')->with('success', 'Ijarachi muvaffaqiyatli yaratildi');
+        return redirect()->route('registry', ['tab' => 'tenants'])->with('success', 'Ijarachi muvaffaqiyatli yaratildi');
     }
 
     public function tenantsEdit(Tenant $tenant)
@@ -617,7 +667,7 @@ class WebController extends Controller
 
         $tenant->update($validated);
 
-        return redirect()->route('tenants.show', $tenant)->with('success', 'Ijarachi yangilandi');
+        return redirect()->route('registry.tenants.show', $tenant)->with('success', 'Ijarachi yangilandi');
     }
 
     public function tenantsDestroy(Tenant $tenant)
@@ -626,7 +676,7 @@ class WebController extends Controller
             return back()->with('error', 'Faol shartnomasi bor ijarachini o\'chirib bo\'lmaydi');
         }
         $tenant->delete();
-        return redirect()->route('tenants.index')->with('success', 'Ijarachi o\'chirildi');
+        return redirect()->route('registry', ['tab' => 'tenants'])->with('success', 'Ijarachi o\'chirildi');
     }
 
     // ==================== LOTS ====================
@@ -821,7 +871,7 @@ class WebController extends Controller
 
         Lot::create($validated);
 
-        return redirect()->route('lots.index')->with('success', 'Lot muvaffaqiyatli yaratildi');
+        return redirect()->route('registry', ['tab' => 'lots'])->with('success', 'Lot muvaffaqiyatli yaratildi');
     }
 
     public function lotsEdit(Lot $lot)
@@ -907,7 +957,7 @@ class WebController extends Controller
 
         $lot->update($validated);
 
-        return redirect()->route('lots.show', $lot)->with('success', 'Lot yangilandi');
+        return redirect()->route('registry.lots.show', $lot)->with('success', 'Lot yangilandi');
     }
 
     public function lotsDestroy(Lot $lot)
@@ -916,7 +966,7 @@ class WebController extends Controller
             return back()->with('error', 'Ijarada bo\'lgan lotni o\'chirib bo\'lmaydi');
         }
         $lot->delete();
-        return redirect()->route('lots.index')->with('success', 'Lot o\'chirildi');
+        return redirect()->route('registry', ['tab' => 'lots'])->with('success', 'Lot o\'chirildi');
     }
 
     // ==================== CONTRACTS ====================
@@ -983,7 +1033,7 @@ class WebController extends Controller
         $contract->generatePaymentSchedule();
         $lot->update(['holat' => 'ijarada']);
 
-        return redirect()->route('lots.show', $lot)->with('success', 'Shartnoma muvaffaqiyatli yaratildi');
+        return redirect()->route('registry.lots.show', $lot)->with('success', 'Shartnoma muvaffaqiyatli yaratildi');
     }
 
     public function contractsEdit(Contract $contract)
@@ -1005,7 +1055,7 @@ class WebController extends Controller
 
         $contract->update($validated);
 
-        return redirect()->route('lots.show', $contract->lot)->with('success', 'Shartnoma yangilandi');
+        return redirect()->route('registry.lots.show', $contract->lot)->with('success', 'Shartnoma yangilandi');
     }
 
     // ==================== PAYMENTS ====================
@@ -1055,7 +1105,7 @@ class WebController extends Controller
             $this->applyPaymentFIFO($payment, $contract);
 
             DB::commit();
-            return redirect()->route('lots.show', $contract->lot)->with('success', 'To\'lov muvaffaqiyatli qabul qilindi');
+            return redirect()->route('registry.lots.show', $contract->lot)->with('success', 'To\'lov muvaffaqiyatli qabul qilindi');
         } catch (\Exception $e) {
             DB::rollBack();
             return back()->with('error', 'Xatolik: ' . $e->getMessage())->withInput();

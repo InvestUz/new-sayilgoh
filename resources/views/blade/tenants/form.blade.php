@@ -5,7 +5,7 @@
 
 @section('content')
 <div class="max-w-4xl">
-    <form action="{{ isset($tenant) ? route('tenants.update', $tenant) : route('tenants.store') }}" method="POST" class="space-y-5">
+    <form action="{{ isset($tenant) ? route('registry.tenants.update', $tenant) : route('registry.tenants.store') }}" method="POST" class="space-y-5">
         @csrf
         @if(isset($tenant)) @method('PUT') @endif
 
@@ -121,12 +121,12 @@
 
         <!-- Tugmalar -->
         <div class="flex items-center justify-between pt-2">
-            <a href="{{ isset($tenant) ? route('tenants.show', $tenant) : route('tenants.index') }}" class="text-[#64748b] hover:text-[#e2e8f0] text-sm flex items-center gap-1">
+            <a href="{{ isset($tenant) ? route('registry.tenants.show', $tenant) : route('registry', ['tab' => 'tenants']) }}" class="text-[#64748b] hover:text-[#e2e8f0] text-sm flex items-center gap-1">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
                 Orqaga
             </a>
             <div class="flex gap-3">
-                <a href="{{ isset($tenant) ? route('tenants.show', $tenant) : route('tenants.index') }}" class="btn btn-secondary">Bekor qilish</a>
+                <a href="{{ isset($tenant) ? route('registry.tenants.show', $tenant) : route('registry', ['tab' => 'tenants']) }}" class="btn btn-secondary">Bekor qilish</a>
                 <button type="submit" class="btn btn-primary">
                     {{ isset($tenant) ? 'Saqlash' : 'Yaratish' }}
                 </button>

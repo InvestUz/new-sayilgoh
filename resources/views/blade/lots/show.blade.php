@@ -3,12 +3,12 @@
 @section('header', 'Lot ' . $lot->lot_raqami)
 @section('subheader', $lot->obyekt_nomi)
 @section('header-actions')
-<a href="{{ route('lots.edit', $lot) }}" class="btn btn-secondary">
+<a href="{{ route('registry.lots.edit', $lot) }}" class="btn btn-secondary">
     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
     Tahrirlash
 </a>
 @if(!$contract)
-<a href="{{ route('contracts.create', ['lot_id' => $lot->id]) }}" class="btn btn-primary">
+<a href="{{ route('registry.contracts.create', ['lot_id' => $lot->id]) }}" class="btn btn-primary">
     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
     Shartnoma yaratish
 </a>
@@ -42,7 +42,7 @@ function formatLotSum($num) {
         @endif
         @if($contract)
         <span class="text-sm text-gray-500">
-            Shartnoma: <a href="{{ route('contracts.show', $contract) }}" class="font-medium text-blue-600 hover:text-blue-800">{{ $contract->shartnoma_raqami }}</a> • {{ \Carbon\Carbon::parse($contract->boshlanish_sanasi)->format('d.m.Y') }} — {{ \Carbon\Carbon::parse($contract->tugash_sanasi)->format('d.m.Y') }}
+            Shartnoma: <a href="{{ route('registry.contracts.show', $contract) }}" class="font-medium text-blue-600 hover:text-blue-800">{{ $contract->shartnoma_raqami }}</a> • {{ \Carbon\Carbon::parse($contract->boshlanish_sanasi)->format('d.m.Y') }} — {{ \Carbon\Carbon::parse($contract->tugash_sanasi)->format('d.m.Y') }}
         </span>
         @endif
     </div>
@@ -151,7 +151,7 @@ function formatLotSum($num) {
             <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
                 <div class="px-5 py-4 border-b border-gray-200 flex items-center justify-between bg-gray-50">
                     <h3 class="font-semibold text-gray-900">Ijarachi</h3>
-                    <a href="{{ route('tenants.show', $contract->tenant) }}" class="text-xs text-blue-600 hover:text-blue-800 font-medium">Batafsil</a>
+                    <a href="{{ route('registry.tenants.show', $contract->tenant) }}" class="text-xs text-blue-600 hover:text-blue-800 font-medium">Batafsil</a>
                 </div>
                 <div class="p-5 space-y-1 text-sm">
                     <div class="flex justify-between py-2"><span class="text-gray-500">Nomi:</span><span class="text-gray-900 font-semibold">{{ $contract->tenant->name }}</span></div>
@@ -181,7 +181,7 @@ function formatLotSum($num) {
                     <svg class="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                 </div>
                 <p class="text-gray-500 mb-4">Faol shartnoma yo'q</p>
-                <a href="{{ route('contracts.create', ['lot_id' => $lot->id]) }}" class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
+                <a href="{{ route('registry.contracts.create', ['lot_id' => $lot->id]) }}" class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                     Shartnoma yaratish
                 </a>
@@ -458,7 +458,7 @@ function formatLotSum($num) {
                                 $canDelete = $schedule->tolangan_summa <= 0;
                                 $isOverdue = $kechikish > 0;
                             @endphp
-                            <tr x-data="{ editing: false, form: { tolov_sanasi: '{{ \Carbon\Carbon::parse($schedule->tolov_sanasi)->format('Y-m-d') }}', oxirgi_muddat: '{{ $muddatDate->format('Y-m-d') }}', tolov_summasi: {{ $schedule->tolov_summasi }} } }"
+                            <tr class="text-gray-700" x-data="{ editing: false, form: { tolov_sanasi: '{{ \Carbon\Carbon::parse($schedule->tolov_sanasi)->format('Y-m-d') }}', oxirgi_muddat: '{{ $muddatDate->format('Y-m-d') }}', tolov_summasi: {{ $schedule->tolov_summasi }} } }"
                                 class="{{ $isOverdue && $schedule->qoldiq_summa > 0 ? 'bg-gray-50' : '' }} hover:bg-gray-100">
                                 <td class="border border-gray-300 px-2 py-2 text-center">{{ $rowNum }}</td>
                                 <td class="border border-gray-300 px-2 py-2">

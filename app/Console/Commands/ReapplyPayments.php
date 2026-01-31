@@ -14,8 +14,8 @@ class ReapplyPayments extends Command
     /**
      * The name and signature of the console command.
      */
-    protected $signature = 'payments:reapply 
-                            {--contract= : Specific contract ID to reapply} 
+    protected $signature = 'payments:reapply
+                            {--contract= : Specific contract ID to reapply}
                             {--payment= : Specific payment ID to reapply}
                             {--dry-run : Show what would be done without making changes}';
 
@@ -196,7 +196,7 @@ class ReapplyPayments extends Command
 
             // Calculate penalty based on payment date (not today)
             $oxirgiMuddat = Carbon::parse($schedule->oxirgi_muddat);
-            
+
             // Only charge penalty if deadline passed BEFORE payment date
             if ($tolovSanasi->gt($oxirgiMuddat)) {
                 $kechikishKunlari = $oxirgiMuddat->diffInDays($tolovSanasi);

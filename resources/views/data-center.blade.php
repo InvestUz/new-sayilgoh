@@ -258,15 +258,15 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
                     Monitoring
                 </a>
-                <a href="{{ route('lots.index') }}" class="quick-link">
+                <a href="{{ route('registry', ['tab' => 'lots']) }}" class="quick-link">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
                     Lotlar
                 </a>
-                <a href="{{ route('tenants.index') }}" class="quick-link">
+                <a href="{{ route('registry', ['tab' => 'tenants']) }}" class="quick-link">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
                     Ijarachilar
                 </a>
-                <a href="{{ route('contracts.index') }}" class="quick-link">
+                <a href="{{ route('registry') }}" class="quick-link">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                     Shartnomalar
                 </a>
@@ -364,31 +364,31 @@
                 <div class="panel">
                     <div class="stats-row">
                         <div class="stat-card">
-                            <a href="{{ route('lots.index') }}">
+                            <a href="{{ route('registry', ['tab' => 'lots']) }}">
                                 <svg class="stat-icon" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="8" y="6" width="32" height="24" rx="2"/><line x1="8" y1="18" x2="40" y2="18"/><line x1="24" y1="30" x2="24" y2="38"/><line x1="16" y1="38" x2="32" y2="38"/></svg>
                                 <div class="stat-info"><h4>Lotlar</h4><div class="val">{{ $totalLots }}</div></div>
                             </a>
                         </div>
                         <div class="stat-card">
-                            <a href="{{ route('contracts.index') }}">
+                            <a href="{{ route('registry') }}">
                                 <svg class="stat-icon" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="24" cy="12" rx="14" ry="5"/><path d="M10 12v8c0 2.8 6.3 5 14 5s14-2.2 14-5v-8"/><path d="M10 20v8c0 2.8 6.3 5 14 5s14-2.2 14-5v-8"/></svg>
                                 <div class="stat-info"><h4>Shartnomalar</h4><div class="val">{{ $activeContracts }}</div></div>
                             </a>
                         </div>
                         <div class="stat-card">
-                            <a href="{{ route('tenants.index') }}">
+                            <a href="{{ route('registry', ['tab' => 'tenants']) }}">
                                 <svg class="stat-icon" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="24" cy="24" r="14"/><ellipse cx="24" cy="24" rx="14" ry="5"/><ellipse cx="24" cy="24" rx="5" ry="14"/></svg>
                                 <div class="stat-info"><h4>Ijarachilar</h4><div class="val">{{ $totalTenants }}</div></div>
                             </a>
                         </div>
                         <div class="stat-card">
-                            <a href="{{ route('payments.index') }}">
+                            <a href="{{ route('registry', ['tab' => 'payments']) }}">
                                 <svg class="stat-icon" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="6" y="18" width="36" height="12" rx="2"/><circle cx="14" cy="24" r="3" fill="currentColor"/><circle cx="24" cy="24" r="3" fill="currentColor"/><circle cx="34" cy="24" r="3" fill="currentColor"/></svg>
                                 <div class="stat-info"><h4>To'lovlar</h4><div class="val cyan">{{ $totalPayments }}</div></div>
                             </a>
                         </div>
                         <div class="stat-card">
-                            <a href="{{ route('lots.index', ['filter' => 'muddati_otgan']) }}">
+                            <a href="{{ route('registry', ['tab' => 'lots']) }}">
                                 <svg class="stat-icon" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M24 4L6 12v12c0 11 8 18 18 22 10-4 18-11 18-22V12L24 4z"/><line x1="24" y1="16" x2="24" y2="26"/><circle cx="24" cy="32" r="2" fill="currentColor"/></svg>
                                 <div class="stat-info"><h4>Kechikkan</h4><div class="val red">{{ $overdueCount }}</div></div>
                             </a>
@@ -524,15 +524,15 @@
                 <div class="panel" style="flex: 1;">
                     <div class="panel-title">Tezkor havolalar</div>
                     <div style="display: flex; flex-direction: column; gap: 6px;">
-                        <a href="{{ route('lots.index', ['filter' => 'muddati_otgan']) }}" style="display: flex; align-items: center; justify-content: space-between; padding: 8px; background: rgba(239, 68, 68, 0.1); border-radius: 4px; text-decoration: none; color: #ef4444; font-size: 11px;">
+                        <a href="{{ route('registry', ['tab' => 'lots']) }}" style="display: flex; align-items: center; justify-content: space-between; padding: 8px; background: rgba(239, 68, 68, 0.1); border-radius: 4px; text-decoration: none; color: #ef4444; font-size: 11px;">
                             <span>Muddati o'tgan qarzdorlar</span>
                             <span style="font-weight: 700;">{{ $overdueCount }}</span>
                         </a>
-                        <a href="{{ route('lots.index', ['filter' => 'kutilmoqda']) }}" style="display: flex; align-items: center; justify-content: space-between; padding: 8px; background: rgba(245, 158, 11, 0.1); border-radius: 4px; text-decoration: none; color: #f59e0b; font-size: 11px;">
+                        <a href="{{ route('registry', ['tab' => 'lots']) }}" style="display: flex; align-items: center; justify-content: space-between; padding: 8px; background: rgba(245, 158, 11, 0.1); border-radius: 4px; text-decoration: none; color: #f59e0b; font-size: 11px;">
                             <span>Kutilmoqda</span>
                             <span style="font-weight: 700;">{{ $notYetDueCount }}</span>
                         </a>
-                        <a href="{{ route('lots.index', ['filter' => 'tolangan']) }}" style="display: flex; align-items: center; justify-content: space-between; padding: 8px; background: rgba(34, 197, 94, 0.1); border-radius: 4px; text-decoration: none; color: #22c55e; font-size: 11px;">
+                        <a href="{{ route('registry', ['tab' => 'lots']) }}" style="display: flex; align-items: center; justify-content: space-between; padding: 8px; background: rgba(34, 197, 94, 0.1); border-radius: 4px; text-decoration: none; color: #22c55e; font-size: 11px;">
                             <span>To'langan grafiklar</span>
                             <span style="font-weight: 700;">{{ $statusData['tolangan'] }}</span>
                         </a>

@@ -10,7 +10,7 @@ $buOy = \App\Models\Payment::whereYear('tolov_sanasi', date('Y'))->whereMonth('t
 @endphp
 
 @section('header-actions')
-<a href="{{ route('payments.create') }}" class="btn btn-primary">
+<a href="{{ route('registry.payments.create') }}" class="btn btn-primary">
     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
     Yangi to'lov
 </a>
@@ -77,7 +77,7 @@ $buOy = \App\Models\Payment::whereYear('tolov_sanasi', date('Y'))->whereMonth('t
                         </td>
                         <td>{{ $payment->tolov_sanasi->format('d.m.Y') }}</td>
                         <td>
-                            <a href="{{ route('contracts.show', $payment->contract) }}" class="text-cyan hover:underline">{{ $payment->contract->shartnoma_raqami ?? '-' }}</a>
+                            <a href="{{ route('registry.contracts.show', $payment->contract) }}" class="text-cyan hover:underline">{{ $payment->contract->shartnoma_raqami ?? '-' }}</a>
                         </td>
                         <td>{{ $payment->contract->tenant->name ?? '-' }}</td>
                         <td class="text-right">
