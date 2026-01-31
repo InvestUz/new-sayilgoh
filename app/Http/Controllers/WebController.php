@@ -360,32 +360,60 @@ class WebController extends Controller
             $q->where('holat', 'faol');
         })->count();
 
-        // Payment Schedules - get ALL schedules first, no year filter for totals
-        $allSchedules = \App\Models\PaymentSchedule::all();
+        // Build Payment Schedules query with filters
+        $schedulesQuery = \App\Models\PaymentSchedule::query();
 
-        // Calculate totals from ALL schedules (no filter)
-        $totalPlan = $allSchedules->sum('tolov_summasi');
-        $totalPaid = $allSchedules->sum('tolangan_summa');
-        $totalDebt = $allSchedules->sum('qoldiq_summa');
-        $totalPenya = max(0, $allSchedules->sum('penya_summasi') - $allSchedules->sum('tolangan_penya'));
+        // Apply year filter to payment schedules
+        if ($year) {
+            $schedulesQuery->whereYear('tolov_sanasi', $year);
+        }
 
-        // Payment Statistics - all time
-        $totalPayments = Payment::count();
+        // Apply status filter to payment schedules
+        if ($status === 'muddati_otgan') {
+            $schedulesQuery->where('oxirgi_muddat', '<', $bugun)->where('qoldiq_summa', '>', 0);
+        } elseif ($status === 'kutilmoqda') {
+            $schedulesQuery->where('oxirgi_muddat', '>=', $bugun)->where('qoldiq_summa', '>', 0);
+        } elseif ($status === 'tolangan') {
+            $schedulesQuery->where('qoldiq_summa', '<=', 0);
+        }
+
+        $filteredSchedules = $schedulesQuery->get();
+
+        // Calculate totals from filtered schedules
+        $totalPlan = $filteredSchedules->sum('tolov_summasi');
+        $totalPaid = $filteredSchedules->sum('tolangan_summa');
+        $totalDebt = $filteredSchedules->sum('qoldiq_summa');
+        $totalPenya = max(0, $filteredSchedules->sum('penya_summasi') - $filteredSchedules->sum('tolangan_penya'));
+
+        // Payment Statistics - with year filter
+        $paymentsQuery = Payment::query();
+        if ($year) {
+            $paymentsQuery->whereYear('tolov_sanasi', $year);
+        }
+        $totalPayments = $paymentsQuery->count();
 
         $thisMonthPayments = Payment::whereMonth('tolov_sanasi', $bugun->month)
             ->whereYear('tolov_sanasi', $bugun->year)->count();
         $thisMonthSum = Payment::whereMonth('tolov_sanasi', $bugun->month)
             ->whereYear('tolov_sanasi', $bugun->year)->sum('summa');
 
-        // Overdue calculation (past due with remaining balance)
-        $overdueSchedules = \App\Models\PaymentSchedule::where('oxirgi_muddat', '<', $bugun)
-            ->where('qoldiq_summa', '>', 0)->get();
+        // Overdue calculation (past due with remaining balance) - with year filter
+        $overdueQuery = \App\Models\PaymentSchedule::where('oxirgi_muddat', '<', $bugun)
+            ->where('qoldiq_summa', '>', 0);
+        if ($year) {
+            $overdueQuery->whereYear('tolov_sanasi', $year);
+        }
+        $overdueSchedules = $overdueQuery->get();
         $overdueDebt = $overdueSchedules->sum('qoldiq_summa');
         $overdueCount = $overdueSchedules->count();
 
-        // Not yet due calculation
-        $notYetDueSchedules = \App\Models\PaymentSchedule::where('oxirgi_muddat', '>=', $bugun)
-            ->where('qoldiq_summa', '>', 0)->get();
+        // Not yet due calculation - with year filter
+        $notYetDueQuery = \App\Models\PaymentSchedule::where('oxirgi_muddat', '>=', $bugun)
+            ->where('qoldiq_summa', '>', 0);
+        if ($year) {
+            $notYetDueQuery->whereYear('tolov_sanasi', $year);
+        }
+        $notYetDueSchedules = $notYetDueQuery->get();
         $notYetDueDebt = $notYetDueSchedules->sum('qoldiq_summa');
         $notYetDueCount = $notYetDueSchedules->count();
 
@@ -394,9 +422,14 @@ class WebController extends Controller
         $debtPercent = $totalPlan > 0 ? round(($totalDebt / $totalPlan) * 100, 1) : 0;
         $overduePercent = $totalDebt > 0 ? round(($overdueDebt / $totalDebt) * 100, 1) : 0;
 
-        // Status distribution for chart
+        // Status distribution for chart - with year filter
+        $tolanganQuery = \App\Models\PaymentSchedule::where('qoldiq_summa', '<=', 0);
+        if ($year) {
+            $tolanganQuery->whereYear('tolov_sanasi', $year);
+        }
+
         $statusData = [
-            'tolangan' => \App\Models\PaymentSchedule::where('qoldiq_summa', '<=', 0)->count(),
+            'tolangan' => $tolanganQuery->count(),
             'kutilmoqda' => $notYetDueCount,
             'muddati_otgan' => $overdueCount,
         ];

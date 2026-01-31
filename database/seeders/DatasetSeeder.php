@@ -24,7 +24,7 @@ class DatasetSeeder extends Seeder
         $this->buildMonthMapping();
 
         // Read CSV file (Updated to new format)
-        $csvPath = public_path('dataset/Bazaga_poytaxt_ijara_ro`yxat_80_upg.csv');
+        $csvPath = public_path('dataset/dataset.csv');
         if (!file_exists($csvPath)) {
             $this->command->error('CSV file not found: ' . $csvPath);
             return;
