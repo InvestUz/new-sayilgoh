@@ -60,13 +60,54 @@ class DatasetSeeder extends Seeder
             return;
         }
 
-        // Read header row (single row - newline inside quoted field doesn't create new row)
+        // Read header row (may contain newline inside quoted field)
+        // Skip lines until we find actual data (header ends when we see numeric first column)
         $header = fgetcsv($handle, 0, ';');
+        
+        // Check if header was read correctly - first data row should start with number
+        $testRow = fgetcsv($handle, 0, ';');
+        if (!is_numeric(trim($testRow[0] ?? ''))) {
+            // Header spanned multiple lines, this is still header continuation
+            // Re-read to skip remaining header
+            $this->command->warn('Multi-line header detected, skipping...');
+            $testRow = fgetcsv($handle, 0, ';');
+        }
+        
+        // Rewind and skip header properly, then process testRow first
+        $firstDataRow = $testRow;
 
         $rowNumber = 0;
         $imported = 0;
         $skipped = 0;
         $tenantCache = [];
+
+        // Process first data row
+        if ($firstDataRow && !empty(array_filter($firstDataRow))) {
+            $rowNumber++;
+            try {
+                $data = $this->parseRow($firstDataRow);
+                $lot = $this->createLot($data, $rowNumber);
+                
+                if (empty($data['winner_name'])) {
+                    $lot->update(['holat' => 'bosh']);
+                    $imported++;
+                } else {
+                    $tenantKey = $this->normalizeName($data['winner_name']) . '_' . $this->normalizePhone($data['phone']);
+                    if (!isset($tenantCache[$tenantKey])) {
+                        $tenant = $this->createTenant($data);
+                        $tenantCache[$tenantKey] = $tenant->id;
+                    }
+                    $tenantId = $tenantCache[$tenantKey];
+                    $contract = $this->createContract($data, $lot->id, $tenantId);
+                    $this->createPaymentSchedules($contract, $data);
+                    $lot->update(['holat' => 'ijarada']);
+                    $imported++;
+                }
+            } catch (\Exception $e) {
+                $this->command->warn("Row {$rowNumber}: " . $e->getMessage());
+                $skipped++;
+            }
+        }
 
         while (($row = fgetcsv($handle, 0, ';')) !== false) {
             $rowNumber++;
@@ -323,6 +364,10 @@ class DatasetSeeder extends Seeder
     {
         // Use lot number from CSV, or extract house number from address, or use row number
         $lotNumber = $data['lot_number'];
+        
+        // Clean lot number - remove commas and extra characters
+        $lotNumber = str_replace(',', '', $lotNumber);
+        $lotNumber = preg_replace('/[^\d\-\/]/', '', $lotNumber);
 
         if (empty($lotNumber)) {
             // Try to extract house number from address (e.g., "40/19" from "Охангарон Шох кучаси 40/19")

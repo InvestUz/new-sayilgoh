@@ -11,6 +11,10 @@ use Illuminate\Support\Facades\Route;
 
 // Dashboard - Data Center view
 Route::get('/', [WebController::class, 'dataCenter'])->name('dashboard');
+Route::get('/data-center', [WebController::class, 'dataCenter'])->name('data-center');
+
+// Import Statistics - Ma'lumotlar import holati
+Route::get('/import-stats', [WebController::class, 'importStats'])->name('import-stats');
 
 // Unified Registry - All CRUD in one place
 Route::prefix('registry')->group(function () {

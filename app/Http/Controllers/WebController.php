@@ -446,15 +446,24 @@ class WebController extends Controller
             ->limit(10)
             ->get();
 
-        // Years list for filter - from payment schedules
-        $years = \App\Models\PaymentSchedule::selectRaw('YEAR(tolov_sanasi) as year')
+        // Years list for filter - include range from earliest data to current year
+        $dbYears = \App\Models\PaymentSchedule::selectRaw('YEAR(tolov_sanasi) as year')
             ->distinct()
             ->whereNotNull('tolov_sanasi')
-            ->orderBy('year', 'desc')
             ->pluck('year')
             ->filter()
             ->toArray();
-        if (empty($years)) $years = [date('Y')];
+
+        $contractYears = Contract::selectRaw('YEAR(boshlanish_sanasi) as year')
+            ->distinct()
+            ->pluck('year')
+            ->filter()
+            ->toArray();
+
+        $allYears = array_unique(array_merge($dbYears, $contractYears));
+        $minYear = !empty($allYears) ? min(min($allYears), 2024) : 2024;
+        $maxYear = max(date('Y'), !empty($allYears) ? max($allYears) : date('Y'));
+        $years = range($maxYear, $minYear); // descending order
 
         return view('data-center', compact(
             'totalLots', 'activeLots', 'vacantLots', 'umumiyMaydon',
@@ -1153,5 +1162,173 @@ class WebController extends Controller
         $payment->asosiy_qarz_uchun = $asosiyQarzUchun;
         $payment->penya_uchun = $penyaUchun;
         $payment->save();
+    }
+
+    // ==================== IMPORT STATISTICS ====================
+    public function importStats()
+    {
+        $bugun = Carbon::today();
+
+        // Basic counts
+        $stats = [
+            'lots_count' => Lot::count(),
+            'tenants_count' => Tenant::count(),
+            'contracts_count' => Contract::count(),
+            'active_contracts' => Contract::where('holat', 'faol')->count(),
+            'schedules_count' => \App\Models\PaymentSchedule::count(),
+            'payments_count' => Payment::count(),
+        ];
+
+        // Payment schedule statistics
+        $scheduleStats = [
+            'tolangan' => \App\Models\PaymentSchedule::where('holat', 'tolangan')->count(),
+            'qisman_tolangan' => \App\Models\PaymentSchedule::where('holat', 'qisman_tolangan')->count(),
+            'tolanmagan' => \App\Models\PaymentSchedule::where('holat', 'tolanmagan')->count(),
+            'kutilmoqda' => \App\Models\PaymentSchedule::where('holat', 'kutilmoqda')->count(),
+        ];
+
+        // Financial summary
+        $totalPlan = \App\Models\PaymentSchedule::sum('tolov_summasi');
+        $totalPaid = \App\Models\PaymentSchedule::sum('tolangan_summa');
+        $totalDebt = \App\Models\PaymentSchedule::sum('qoldiq_summa');
+        $totalPenya = \App\Models\PaymentSchedule::sum('penya_summasi');
+
+        // Overdue calculations
+        $overdueSchedules = \App\Models\PaymentSchedule::where('oxirgi_muddat', '<', $bugun)
+            ->where('qoldiq_summa', '>', 0)
+            ->get();
+        $overdueDebt = $overdueSchedules->sum('qoldiq_summa');
+        $overdueCount = $overdueSchedules->count();
+
+        // Not yet due
+        $notYetDue = \App\Models\PaymentSchedule::where('oxirgi_muddat', '>=', $bugun)
+            ->where('qoldiq_summa', '>', 0)
+            ->get();
+        $notYetDueDebt = $notYetDue->sum('qoldiq_summa');
+        $notYetDueCount = $notYetDue->count();
+
+        // Recent payments (last 30 days)
+        $recentPayments = Payment::with(['contract.tenant', 'contract.lot'])
+            ->where('tolov_sanasi', '>=', $bugun->copy()->subDays(30))
+            ->orderBy('tolov_sanasi', 'desc')
+            ->limit(20)
+            ->get();
+
+        // Contracts without payments
+        $contractsWithoutPayments = Contract::where('holat', 'faol')
+            ->whereDoesntHave('payments')
+            ->with(['tenant', 'lot'])
+            ->get();
+
+        // Tenants with multiple contracts
+        $tenantsMultipleContracts = Tenant::withCount('contracts')
+            ->having('contracts_count', '>', 1)
+            ->get();
+
+        // Lots with issues (empty lot numbers or missing data)
+        $lotsWithIssues = Lot::where(function($q) {
+            $q->whereNull('lot_raqami')
+              ->orWhere('lot_raqami', '')
+              ->orWhere('lot_raqami', 'LIKE', '%-%'); // Has suffix meaning duplicate was found
+        })->get();
+
+        // Payment matching summary (estimated from imported payments)
+        $importedPayments = Payment::where('izoh', 'LIKE', '%Imported from FACT CSV%')->count();
+        $matchedByLot = Payment::where('izoh', 'LIKE', '%Matched by: lot_number%')->count();
+        $matchedByInn = Payment::where('izoh', 'LIKE', '%Matched by: inn%')->count();
+        $matchedByName = Payment::where('izoh', 'LIKE', '%Matched by: tenant_name%')->count();
+
+        // Get all matched payments with details
+        $allMatchedPayments = Payment::with(['contract.tenant', 'contract.lot'])
+            ->where('izoh', 'LIKE', '%Imported from FACT CSV%')
+            ->orderBy('tolov_sanasi', 'desc')
+            ->get();
+
+        // Get unmatched payments from CSV
+        $unmatchedPayments = $this->getUnmatchedFromCsv();
+
+        return view('import-stats', compact(
+            'stats', 'scheduleStats',
+            'totalPlan', 'totalPaid', 'totalDebt', 'totalPenya',
+            'overdueDebt', 'overdueCount', 'notYetDueDebt', 'notYetDueCount',
+            'recentPayments', 'contractsWithoutPayments', 'tenantsMultipleContracts',
+            'lotsWithIssues', 'importedPayments', 'matchedByLot', 'matchedByInn', 'matchedByName',
+            'allMatchedPayments', 'unmatchedPayments'
+        ));
+    }
+
+    /**
+     * Parse FACT CSV and return payments that couldn't be matched
+     */
+    private function getUnmatchedFromCsv()
+    {
+        $result = collect();
+        $csvPath = public_path('dataset/POYTAXT SAYILGOH FACT.csv');
+        if (!file_exists($csvPath)) return $result;
+
+        $existingLots = Lot::pluck('id', 'lot_raqami')->toArray();
+        $existingInns = Tenant::pluck('id', 'inn')->toArray();
+        $existingNames = Tenant::pluck('id', 'name')->mapWithKeys(function($id, $name) {
+            return [mb_strtolower(trim($name)) => $id];
+        })->toArray();
+
+        $normalizedLots = [];
+        foreach ($existingLots as $lot => $id) {
+            $normalized = preg_replace('/[^A-Za-z0-9]/', '', $lot);
+            $normalizedLots[strtoupper($normalized)] = $id;
+        }
+
+        $handle = fopen($csvPath, 'r');
+        if (!$handle) return $result;
+
+        fgetcsv($handle, 0, ';');
+
+        while (($row = fgetcsv($handle, 0, ';')) !== false) {
+            if (count($row) < 10) continue;
+
+            $date = trim($row[0] ?? '');
+            $lotNumber = trim($row[2] ?? '');
+            $inn = preg_replace('/[^0-9]/', '', $row[3] ?? '');
+            $tenantName = trim($row[4] ?? '');
+            $amount = (float) str_replace([' ', ','], ['', '.'], $row[9] ?? '0');
+            $docNumber = trim($row[1] ?? '');
+            $purpose = trim($row[7] ?? '');
+
+            if ($amount <= 0) continue;
+
+            $matched = false;
+
+            if (!empty($lotNumber)) {
+                $normalized = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $lotNumber));
+                if (isset($normalizedLots[$normalized])) $matched = true;
+            }
+
+            if (!$matched && !empty($inn)) {
+                if (isset($existingInns[$inn])) {
+                    $matched = true;
+                } elseif (strlen($inn) >= 9 && isset($existingInns[substr($inn, -9)])) {
+                    $matched = true;
+                }
+            }
+
+            if (!$matched && !empty($tenantName)) {
+                if (isset($existingNames[mb_strtolower(trim($tenantName))])) $matched = true;
+            }
+
+            if (!$matched) {
+                $result->push([
+                    'date' => $date,
+                    'lot_number' => $lotNumber,
+                    'inn' => $inn,
+                    'tenant_name' => $tenantName,
+                    'amount' => $amount,
+                    'doc_number' => $docNumber,
+                    'purpose' => mb_substr($purpose, 0, 50),
+                ]);
+            }
+        }
+        fclose($handle);
+
+        return $result;
     }
 }

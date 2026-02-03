@@ -99,7 +99,7 @@ class FactPaymentSeeder extends Seeder
             }
         }
 
-        // Cache tenants by INN
+        // Cache tenants by INN (and partial INN for PINFL matching)
         $tenants = Tenant::with(['contracts' => function ($q) {
             $q->where('holat', 'faol');
         }])->get();
@@ -107,7 +107,24 @@ class FactPaymentSeeder extends Seeder
         foreach ($tenants as $tenant) {
             $cleanInn = preg_replace('/[^0-9]/', '', $tenant->inn);
             if ($cleanInn) {
+                // Store by full INN
                 $this->innCache[$cleanInn] = $tenant;
+                
+                // For 14-digit PINFLs, also store by last 9 digits (which might be used as INN)
+                if (strlen($cleanInn) == 14) {
+                    $last9 = substr($cleanInn, -9);
+                    if (!isset($this->innCache[$last9])) {
+                        $this->innCache[$last9] = $tenant;
+                    }
+                }
+                
+                // Also store 9-digit version if it's longer
+                if (strlen($cleanInn) > 9) {
+                    $first9 = substr($cleanInn, 0, 9);
+                    if (!isset($this->innCache[$first9])) {
+                        $this->innCache[$first9] = $tenant;
+                    }
+                }
             }
 
             // Also cache by normalized name
@@ -270,7 +287,7 @@ class FactPaymentSeeder extends Seeder
 
     /**
      * Find matching contract
-     * Priority: 1) Lot number, 2) INN/PINFL, 3) Tenant name
+     * Priority: 1) Lot number, 2) INN/PINFL from purpose, 3) INN from CSV column, 4) Tenant name
      */
     private function findContract(array &$extracted, array $data): ?Contract
     {
@@ -312,7 +329,7 @@ class FactPaymentSeeder extends Seeder
             }
         }
 
-        // Method 2: Match by INN/PINFL
+        // Method 2: Match by INN/PINFL from payment purpose
         if (!empty($extracted['inn_pinfl'])) {
             $inn = $extracted['inn_pinfl'];
 
@@ -338,7 +355,34 @@ class FactPaymentSeeder extends Seeder
             }
         }
 
-        // Method 3: Match by tenant name (least reliable - one tenant may have multiple lots)
+        // Method 3: Match by INN from CSV column (may be different from payment purpose)
+        if (!empty($data['inn'])) {
+            $csvInn = preg_replace('/[^0-9]/', '', $data['inn']);
+            if ($csvInn && strlen($csvInn) >= 9) {
+                if (isset($this->innCache[$csvInn])) {
+                    $tenant = $this->innCache[$csvInn];
+                    $contract = $tenant->contracts->first();
+                    if ($contract) {
+                        $extracted['matched_by'] = 'csv_inn';
+                        return $contract;
+                    }
+                }
+                
+                // Try LIKE search with CSV INN
+                $tenant = Tenant::where('inn', 'LIKE', '%' . $csvInn . '%')
+                    ->with(['contracts' => function ($q) {
+                        $q->where('holat', 'faol');
+                    }])
+                    ->first();
+
+                if ($tenant && $tenant->contracts->isNotEmpty()) {
+                    $extracted['matched_by'] = 'csv_inn_like';
+                    return $tenant->contracts->first();
+                }
+            }
+        }
+
+        // Method 4: Match by tenant name (least reliable - one tenant may have multiple lots)
         if (!empty($extracted['tenant_name'])) {
             $normalizedName = $this->normalizeName($extracted['tenant_name']);
 
