@@ -293,83 +293,73 @@ function formatLotSum($num) {
 
         @if(count($contractYearPeriods) > 0)
         <div class="overflow-x-auto">
-            <table class="w-full text-xs border-collapse">
-                <thead>
-                    <tr class="bg-gray-50">
-                        <th rowspan="2" class="border border-gray-300 px-2 py-2 text-left font-semibold text-gray-700 w-8">№</th>
-                        <th rowspan="2" class="border border-gray-300 px-2 py-2 text-left font-semibold text-gray-700 min-w-[140px]">Shartnoma davri</th>
-                        <th rowspan="2" class="border border-gray-300 px-2 py-2 text-center font-semibold text-gray-700">Oylar</th>
-                        <th colspan="2" class="border border-gray-300 px-2 py-1 text-center font-semibold text-gray-700 bg-gray-100">Reja</th>
-                        <th colspan="2" class="border border-gray-300 px-2 py-1 text-center font-semibold text-gray-700 bg-blue-50">Fakt</th>
-                        <th colspan="2" class="border border-gray-300 px-2 py-1 text-center font-semibold text-gray-700 bg-red-50">Qoldiq</th>
-                        <th rowspan="2" class="border border-gray-300 px-2 py-2 text-center font-semibold text-gray-700">%</th>
-                        <th rowspan="2" class="border border-gray-300 px-2 py-2 text-center font-semibold text-gray-700 bg-amber-50">Penya</th>
-                        <th rowspan="2" class="border border-gray-300 px-2 py-2 text-center font-semibold text-gray-700 w-20">Amal</th>
+            <table class="w-full text-xs">
+                <thead class="bg-slate-700/50 text-slate-300">
+                    <tr>
+                        <th rowspan="2" class="border border-slate-600 px-2 py-1 text-left">№</th>
+                        <th rowspan="2" class="border border-slate-600 px-2 py-1 text-left">Shartnoma davri</th>
+                        <th rowspan="2" class="border border-slate-600 px-2 py-1 text-center">Oylar</th>
+                        <th colspan="2" class="border border-slate-600 px-2 py-1 text-center">Reja</th>
+                        <th colspan="2" class="border border-slate-600 px-2 py-1 text-center text-blue-400">Fakt</th>
+                        <th colspan="2" class="border border-slate-600 px-2 py-1 text-center text-red-400">Qoldiq</th>
+                        <th rowspan="2" class="border border-slate-600 px-2 py-1 text-center">%</th>
+                        <th rowspan="2" class="border border-slate-600 px-2 py-1 text-center text-amber-400">Penya</th>
+                        <th rowspan="2" class="border border-slate-600 px-2 py-1 text-center">Amal</th>
                     </tr>
-                    <tr class="bg-gray-50 text-[10px]">
-                        <th class="border border-gray-300 px-2 py-1 text-right text-gray-600">summa</th>
-                        <th class="border border-gray-300 px-2 py-1 text-right text-gray-600">oylik</th>
-                        <th class="border border-gray-300 px-2 py-1 text-right text-gray-600 bg-blue-50">tushgan</th>
-                        <th class="border border-gray-300 px-2 py-1 text-right text-gray-600 bg-blue-50">oylik o'rt</th>
-                        <th class="border border-gray-300 px-2 py-1 text-right text-gray-600 bg-red-50">jami</th>
-                        <th class="border border-gray-300 px-2 py-1 text-right text-gray-600 bg-red-50">muddati o'tgan</th>
+                    <tr class="text-[10px] text-slate-400">
+                        <th class="border border-slate-600 px-2 py-1 text-right">summa</th>
+                        <th class="border border-slate-600 px-2 py-1 text-right">oylik</th>
+                        <th class="border border-slate-600 px-2 py-1 text-right text-blue-400">tushgan</th>
+                        <th class="border border-slate-600 px-2 py-1 text-right text-blue-400">oylik</th>
+                        <th class="border border-slate-600 px-2 py-1 text-right text-red-400">jami</th>
+                        <th class="border border-slate-600 px-2 py-1 text-right text-red-400">o'tgan</th>
                     </tr>
                 </thead>
-                <tbody>
-                    <!-- JAMI Row -->
-                    <tr class="bg-blue-50 font-bold">
-                        <td class="border border-gray-300 px-2 py-2 text-center"></td>
-                        <td class="border border-gray-300 px-2 py-2 text-gray-900">JAMI:</td>
-                        <td class="border border-gray-300 px-2 py-2 text-center text-blue-700">{{ $allSchedules->count() }}</td>
-                        <td class="border border-gray-300 px-2 py-2 text-right">{{ number_format($grandTotal, 0, ',', ' ') }}</td>
-                        <td class="border border-gray-300 px-2 py-2 text-right text-gray-600">{{ $allSchedules->count() > 0 ? number_format($grandTotal / $allSchedules->count(), 0, ',', ' ') : 0 }}</td>
-                        <td class="border border-gray-300 px-2 py-2 text-right text-blue-700">{{ number_format($grandPaid, 0, ',', ' ') }}</td>
-                        <td class="border border-gray-300 px-2 py-2 text-right text-blue-600">{{ $allSchedules->where('tolangan_summa', '>', 0)->count() > 0 ? number_format($grandPaid / $allSchedules->where('tolangan_summa', '>', 0)->count(), 0, ',', ' ') : 0 }}</td>
-                        <td class="border border-gray-300 px-2 py-2 text-right text-red-600">{{ number_format($grandDebt, 0, ',', ' ') }}</td>
-                        <td class="border border-gray-300 px-2 py-2 text-right text-red-700 font-bold">{{ number_format($grandOverdue, 0, ',', ' ') }}</td>
-                        <td class="border border-gray-300 px-2 py-2 text-center {{ $grandPercent >= 100 ? 'text-green-700' : ($grandPercent >= 50 ? 'text-blue-700' : 'text-red-700') }}">{{ $grandPercent }}%</td>
-                        <td class="border border-gray-300 px-2 py-2 text-right text-amber-700">{{ number_format($grandPenya, 0, ',', ' ') }}</td>
-                        <td class="border border-gray-300 px-2 py-2 text-center"></td>
+                <tbody class="text-slate-200">
+                    <tr class="bg-slate-700/30 font-bold">
+                        <td class="border border-slate-600 px-2 py-1 text-center"></td>
+                        <td class="border border-slate-600 px-2 py-1 text-white">JAMI:</td>
+                        <td class="border border-slate-600 px-2 py-1 text-center text-blue-400">{{ $allSchedules->count() }}</td>
+                        <td class="border border-slate-600 px-2 py-1 text-right text-white">{{ number_format($grandTotal, 0, ',', ' ') }}</td>
+                        <td class="border border-slate-600 px-2 py-1 text-right text-slate-400">{{ $allSchedules->count() > 0 ? number_format($grandTotal / $allSchedules->count(), 0, ',', ' ') : 0 }}</td>
+                        <td class="border border-slate-600 px-2 py-1 text-right text-blue-400">{{ number_format($grandPaid, 0, ',', ' ') }}</td>
+                        <td class="border border-slate-600 px-2 py-1 text-right text-blue-400">{{ $allSchedules->where('tolangan_summa', '>', 0)->count() > 0 ? number_format($grandPaid / $allSchedules->where('tolangan_summa', '>', 0)->count(), 0, ',', ' ') : 0 }}</td>
+                        <td class="border border-slate-600 px-2 py-1 text-right text-red-400">{{ number_format($grandDebt, 0, ',', ' ') }}</td>
+                        <td class="border border-slate-600 px-2 py-1 text-right text-red-400">{{ number_format($grandOverdue, 0, ',', ' ') }}</td>
+                        <td class="border border-slate-600 px-2 py-1 text-center {{ $grandPercent >= 100 ? 'text-green-400' : ($grandPercent >= 50 ? 'text-blue-400' : 'text-red-400') }}">{{ $grandPercent }}%</td>
+                        <td class="border border-slate-600 px-2 py-1 text-right text-amber-400">{{ number_format($grandPenya, 0, ',', ' ') }}</td>
+                        <td class="border border-slate-600 px-2 py-1"></td>
                     </tr>
-
                     @foreach($contractYearPeriods as $period)
                     @php
                         $isCurrentPeriod = $period['num'] === $currentPeriodNum;
                         $periodScheduleIds = $period['schedules']->pluck('id')->toArray();
-                        $canDeletePeriod = $period['paid'] <= 0; // Can only delete if nothing paid
+                        $canDeletePeriod = $period['paid'] <= 0;
                     @endphp
-                    <tr class="hover:bg-gray-50 {{ $isCurrentPeriod ? 'bg-blue-50 border-l-4 border-l-blue-500' : '' }}">
-                        <td class="border border-gray-300 px-2 py-2 text-center {{ $isCurrentPeriod ? 'font-bold text-blue-700' : 'text-gray-600' }}">{{ $period['num'] }}</td>
-                        <td class="border border-gray-300 px-2 py-2">
-                            <div class="flex items-center gap-2">
-                                @if($isCurrentPeriod)
-                                <span class="px-1.5 py-0.5 bg-blue-600 text-white text-[9px] font-bold rounded">JORIY</span>
-                                @endif
-                                <span class="font-medium text-gray-900">{{ $period['start']->format('d.m.Y') }}</span>
-                                <span class="text-gray-400 mx-1">—</span>
-                                <span class="font-medium text-gray-900">{{ $period['end']->format('d.m.Y') }}</span>
-                            </div>
+                    <tr class="hover:bg-slate-700/30 {{ $isCurrentPeriod ? 'bg-blue-900/20' : '' }}">
+                        <td class="border border-slate-600 px-2 py-1 text-center {{ $isCurrentPeriod ? 'text-blue-400 font-bold' : '' }}">{{ $period['num'] }}</td>
+                        <td class="border border-slate-600 px-2 py-1">
+                            @if($isCurrentPeriod)<span class="px-1 bg-blue-600 text-white text-[9px] rounded mr-1">JORIY</span>@endif
+                            <span class="text-white">{{ $period['start']->format('d.m.Y') }}</span>
+                            <span class="text-slate-500">—</span>
+                            <span class="text-white">{{ $period['end']->format('d.m.Y') }}</span>
                         </td>
-                        <td class="border border-gray-300 px-2 py-2 text-center font-medium">{{ $period['months'] }}</td>
-                        <td class="border border-gray-300 px-2 py-2 text-right">{{ number_format($period['total'], 0, ',', ' ') }}</td>
-                        <td class="border border-gray-300 px-2 py-2 text-right text-gray-600">{{ $period['months'] > 0 ? number_format($period['total'] / $period['months'], 0, ',', ' ') : 0 }}</td>
-                        <td class="border border-gray-300 px-2 py-2 text-right {{ $period['paid'] > 0 ? 'text-blue-700 font-medium' : 'text-gray-400' }}">{{ number_format($period['paid'], 0, ',', ' ') }}</td>
-                        <td class="border border-gray-300 px-2 py-2 text-right text-gray-600">{{ $period['schedules']->where('tolangan_summa', '>', 0)->count() > 0 ? number_format($period['paid'] / $period['schedules']->where('tolangan_summa', '>', 0)->count(), 0, ',', ' ') : '—' }}</td>
-                        <td class="border border-gray-300 px-2 py-2 text-right {{ $period['debt'] > 0 ? 'text-red-600' : 'text-green-600' }}">{{ number_format($period['debt'], 0, ',', ' ') }}</td>
-                        <td class="border border-gray-300 px-2 py-2 text-right {{ $period['overdue'] > 0 ? 'text-red-700 font-bold' : 'text-gray-400' }}">{{ $period['overdue'] > 0 ? number_format($period['overdue'], 0, ',', ' ') : '—' }}</td>
-                        <td class="border border-gray-300 px-2 py-2 text-center font-medium {{ $period['percent'] >= 100 ? 'text-green-700' : ($period['percent'] >= 50 ? 'text-blue-700' : 'text-red-700') }}">{{ $period['percent'] }}%</td>
-                        <td class="border border-gray-300 px-2 py-2 text-right {{ $period['penya'] > 0 ? 'text-amber-700' : 'text-gray-400' }}">{{ $period['penya'] > 0 ? number_format($period['penya'], 0, ',', ' ') : '—' }}</td>
-                        <!-- Period Actions -->
-                        <td class="border border-gray-300 px-2 py-2 text-center">
+                        <td class="border border-slate-600 px-2 py-1 text-center">{{ $period['months'] }}</td>
+                        <td class="border border-slate-600 px-2 py-1 text-right text-white">{{ number_format($period['total'], 0, ',', ' ') }}</td>
+                        <td class="border border-slate-600 px-2 py-1 text-right text-slate-400">{{ $period['months'] > 0 ? number_format($period['total'] / $period['months'], 0, ',', ' ') : 0 }}</td>
+                        <td class="border border-slate-600 px-2 py-1 text-right {{ $period['paid'] > 0 ? 'text-blue-400' : 'text-slate-500' }}">{{ number_format($period['paid'], 0, ',', ' ') }}</td>
+                        <td class="border border-slate-600 px-2 py-1 text-right text-slate-400">{{ $period['schedules']->where('tolangan_summa', '>', 0)->count() > 0 ? number_format($period['paid'] / $period['schedules']->where('tolangan_summa', '>', 0)->count(), 0, ',', ' ') : '—' }}</td>
+                        <td class="border border-slate-600 px-2 py-1 text-right {{ $period['debt'] > 0 ? 'text-red-400' : 'text-green-400' }}">{{ number_format($period['debt'], 0, ',', ' ') }}</td>
+                        <td class="border border-slate-600 px-2 py-1 text-right {{ $period['overdue'] > 0 ? 'text-red-400' : 'text-slate-500' }}">{{ $period['overdue'] > 0 ? number_format($period['overdue'], 0, ',', ' ') : '—' }}</td>
+                        <td class="border border-slate-600 px-2 py-1 text-center {{ $period['percent'] >= 100 ? 'text-green-400' : ($period['percent'] >= 50 ? 'text-blue-400' : 'text-red-400') }}">{{ $period['percent'] }}%</td>
+                        <td class="border border-slate-600 px-2 py-1 text-right {{ $period['penya'] > 0 ? 'text-amber-400' : 'text-slate-500' }}">{{ $period['penya'] > 0 ? number_format($period['penya'], 0, ',', ' ') : '—' }}</td>
+                        <td class="border border-slate-600 px-2 py-1 text-center">
                             @if($canDeletePeriod)
-                            <button @click="deletePeriodSchedules([{{ implode(',', $periodScheduleIds) }}])"
-                                    class="p-1 text-gray-400 hover:text-red-600" title="Davrni o'chirish ({{ $period['months'] }} oy)">
+                            <button @click="deletePeriodSchedules([{{ implode(',', $periodScheduleIds) }}])" class="text-slate-500 hover:text-red-400">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                             </button>
                             @else
-                            <span class="p-1 text-gray-300" title="To'langan davr o'chirilmaydi">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
-                            </span>
+                            <span class="text-slate-600"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg></span>
                             @endif
                         </td>
                     </tr>
@@ -379,31 +369,31 @@ function formatLotSum($num) {
         </div>
 
         <!-- Monthly Details (Expandable) -->
-        <div x-data="{ showDetails: false }" class="border-t border-gray-300">
-            <button @click="showDetails = !showDetails" class="w-full px-4 py-2 text-left text-xs text-gray-600 hover:bg-gray-50 flex items-center justify-between">
+        <div x-data="{ showDetails: false }" class="border-t border-slate-600">
+            <button @click="showDetails = !showDetails" class="w-full px-4 py-2 text-left text-xs text-slate-400 hover:bg-slate-700/30 flex items-center justify-between">
                 <span class="font-medium">Oylik tafsilotlar</span>
                 <svg :class="showDetails ? 'rotate-180' : ''" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
             </button>
             <div x-show="showDetails" x-collapse>
-                <table class="w-full text-xs border-collapse">
-                    <thead class="bg-gray-100">
+                <table class="w-full text-xs">
+                    <thead class="bg-slate-700/50 text-slate-300">
                         <tr>
-                            <th class="border border-gray-300 px-2 py-1.5 text-center font-medium text-gray-700">№</th>
-                            <th class="border border-gray-300 px-2 py-1.5 text-left font-medium text-gray-700">Oy</th>
-                            <th class="border border-gray-300 px-2 py-1.5 text-center font-medium text-gray-700">Muddat</th>
-                            <th class="border border-gray-300 px-2 py-1.5 text-right font-medium text-gray-700">Grafik</th>
-                            <th class="border border-gray-300 px-2 py-1.5 text-right font-medium text-gray-700">To'langan</th>
-                            <th class="border border-gray-300 px-2 py-1.5 text-center font-medium text-gray-700">To'lov sanasi</th>
-                            <th class="border border-gray-300 px-2 py-1.5 text-right font-medium text-gray-700">Qoldiq</th>
-                            <th class="border border-gray-300 px-2 py-1.5 text-center font-medium text-gray-700">Kun</th>
-                            <th class="border border-gray-300 px-2 py-1.5 text-center font-medium text-gray-700">Stavka</th>
-                            <th class="border border-gray-300 px-2 py-1.5 text-right font-medium text-gray-700">Penya hisob</th>
-                            <th class="border border-gray-300 px-2 py-1.5 text-right font-medium text-gray-700">To'l. penya</th>
-                            <th class="border border-gray-300 px-2 py-1.5 text-right font-medium text-gray-700">Qol. penya</th>
-                            <th class="border border-gray-300 px-2 py-1.5 text-center font-medium text-gray-700 w-16">Amal</th>
+                            <th class="border border-slate-600 px-2 py-1 text-center">№</th>
+                            <th class="border border-slate-600 px-2 py-1 text-left">Oy</th>
+                            <th class="border border-slate-600 px-2 py-1 text-center">Muddat</th>
+                            <th class="border border-slate-600 px-2 py-1 text-right">Grafik</th>
+                            <th class="border border-slate-600 px-2 py-1 text-right">To'langan</th>
+                            <th class="border border-slate-600 px-2 py-1 text-center">To'lov sanasi</th>
+                            <th class="border border-slate-600 px-2 py-1 text-right">Qoldiq</th>
+                            <th class="border border-slate-600 px-2 py-1 text-center">Kun</th>
+                            <th class="border border-slate-600 px-2 py-1 text-center">Stavka</th>
+                            <th class="border border-slate-600 px-2 py-1 text-right">Penya hisob</th>
+                            <th class="border border-slate-600 px-2 py-1 text-right">To'l. penya</th>
+                            <th class="border border-slate-600 px-2 py-1 text-right">Qol. penya</th>
+                            <th class="border border-slate-600 px-2 py-1 text-center">Amal</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody class="text-slate-200">
                         @php $rowNum = 0; @endphp
                         @foreach($contractYearPeriods as $period)
                             @foreach($period['schedules'] as $idx => $schedule)
@@ -458,63 +448,41 @@ function formatLotSum($num) {
                                 $canDelete = $schedule->tolangan_summa <= 0;
                                 $isOverdue = $kechikish > 0;
                             @endphp
-                            <tr class="text-gray-700" x-data="{ editing: false, form: { tolov_sanasi: '{{ \Carbon\Carbon::parse($schedule->tolov_sanasi)->format('Y-m-d') }}', oxirgi_muddat: '{{ $muddatDate->format('Y-m-d') }}', tolov_summasi: {{ $schedule->tolov_summasi }} } }"
-                                class="{{ $isOverdue && $schedule->qoldiq_summa > 0 ? 'bg-gray-50' : '' }} hover:bg-gray-100">
-                                <td class="border border-gray-300 px-2 py-2 text-center">{{ $rowNum }}</td>
-                                <td class="border border-gray-300 px-2 py-2">
+                            <tr x-data="{ editing: false, form: { tolov_sanasi: '{{ \Carbon\Carbon::parse($schedule->tolov_sanasi)->format('Y-m-d') }}', oxirgi_muddat: '{{ $muddatDate->format('Y-m-d') }}', tolov_summasi: {{ $schedule->tolov_summasi }} } }"
+                                class="{{ $isOverdue && $schedule->qoldiq_summa > 0 ? 'bg-red-900/10' : '' }} hover:bg-slate-700/30">
+                                <td class="border border-slate-600 px-2 py-1 text-center">{{ $rowNum }}</td>
+                                <td class="border border-slate-600 px-2 py-1">
                                     {{ $monthNames[$schedule->oy] ?? $schedule->oy }} {{ $schedule->yil }}
-                                    @if($isCurrentMonth)<span class="text-[9px] font-bold">(joriy)</span>@endif
+                                    @if($isCurrentMonth)<span class="text-[9px] text-blue-400">(joriy)</span>@endif
                                 </td>
-                                <td class="border border-gray-300 px-2 py-2 text-center">
-                                    <template x-if="!editing">
-                                        <span>{{ $muddatDate->format('d.m.Y') }}</span>
-                                    </template>
-                                    <template x-if="editing">
-                                        <input type="date" x-model="form.oxirgi_muddat" class="w-full border rounded px-1 py-0.5 text-xs">
-                                    </template>
+                                <td class="border border-slate-600 px-2 py-1 text-center">
+                                    <template x-if="!editing"><span>{{ $muddatDate->format('d.m.Y') }}</span></template>
+                                    <template x-if="editing"><input type="date" x-model="form.oxirgi_muddat" class="w-full border border-slate-500 bg-slate-700 rounded px-1 py-0.5 text-xs text-white"></template>
                                 </td>
-                                <td class="border border-gray-300 px-2 py-2 text-right">
-                                    <template x-if="!editing">
-                                        <span>{{ number_format($schedule->tolov_summasi, 0, ',', ' ') }}</span>
-                                    </template>
-                                    <template x-if="editing">
-                                        <input type="number" x-model="form.tolov_summasi" class="w-full border rounded px-1 py-0.5 text-xs text-right">
-                                    </template>
+                                <td class="border border-slate-600 px-2 py-1 text-right text-white">
+                                    <template x-if="!editing"><span>{{ number_format($schedule->tolov_summasi, 0, ',', ' ') }}</span></template>
+                                    <template x-if="editing"><input type="number" x-model="form.tolov_summasi" class="w-full border border-slate-500 bg-slate-700 rounded px-1 py-0.5 text-xs text-right text-white"></template>
                                 </td>
-                                <td class="border border-gray-300 px-2 py-2 text-right">{{ $schedule->tolangan_summa > 0 ? number_format($schedule->tolangan_summa, 0, ',', ' ') : '—' }}</td>
-                                <td class="border border-gray-300 px-2 py-2 text-center">{{ $lastPaymentDate ? $lastPaymentDate->format('d.m.Y') : '—' }}</td>
-                                <td class="border border-gray-300 px-2 py-2 text-right font-medium">{{ $schedule->qoldiq_summa > 0 ? number_format($schedule->qoldiq_summa, 0, ',', ' ') : '—' }}</td>
-                                <td class="border border-gray-300 px-2 py-2 text-center">{{ $kechikish > 0 ? $kechikish : '—' }}</td>
-                                <td class="border border-gray-300 px-2 py-2 text-center">{{ $kechikish > 0 ? '0,4%' : '—' }}</td>
-                                <td class="border border-gray-300 px-2 py-2 text-right">{{ $penyaHisob > 0 ? number_format($penyaHisob, 0, ',', ' ') : '—' }}</td>
-                                <td class="border border-gray-300 px-2 py-2 text-right">{{ $tolanganPenya > 0 ? number_format($tolanganPenya, 0, ',', ' ') : '—' }}</td>
-                                <td class="border border-gray-300 px-2 py-2 text-right font-medium">{{ $qoldiqPenya > 0 ? number_format($qoldiqPenya, 0, ',', ' ') : ($tolanganPenya > 0 ? '✓' : '—') }}</td>
-                                <!-- Actions -->
-                                <td class="border border-gray-300 px-1 py-1 text-center">
+                                <td class="border border-slate-600 px-2 py-1 text-right {{ $schedule->tolangan_summa > 0 ? 'text-blue-400' : 'text-slate-500' }}">{{ $schedule->tolangan_summa > 0 ? number_format($schedule->tolangan_summa, 0, ',', ' ') : '—' }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-center text-slate-400">{{ $lastPaymentDate ? $lastPaymentDate->format('d.m.Y') : '—' }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-right {{ $schedule->qoldiq_summa > 0 ? 'text-red-400' : 'text-green-400' }}">{{ $schedule->qoldiq_summa > 0 ? number_format($schedule->qoldiq_summa, 0, ',', ' ') : '—' }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-center {{ $kechikish > 0 ? 'text-red-400' : 'text-slate-500' }}">{{ $kechikish > 0 ? $kechikish : '—' }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-center text-slate-400">{{ $kechikish > 0 ? '0,4%' : '—' }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-right {{ $penyaHisob > 0 ? 'text-amber-400' : 'text-slate-500' }}">{{ $penyaHisob > 0 ? number_format($penyaHisob, 0, ',', ' ') : '—' }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-right {{ $tolanganPenya > 0 ? 'text-green-400' : 'text-slate-500' }}">{{ $tolanganPenya > 0 ? number_format($tolanganPenya, 0, ',', ' ') : '—' }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-right {{ $qoldiqPenya > 0 ? 'text-amber-400' : ($tolanganPenya > 0 ? 'text-green-400' : 'text-slate-500') }}">{{ $qoldiqPenya > 0 ? number_format($qoldiqPenya, 0, ',', ' ') : ($tolanganPenya > 0 ? '✓' : '—') }}</td>
+                                <td class="border border-slate-600 px-1 py-1 text-center">
                                     <template x-if="!editing">
                                         <div class="flex items-center justify-center gap-1">
-                                            <button @click="editing = true" class="p-1 text-gray-400 hover:text-blue-600" title="Tahrirlash">
-                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
-                                            </button>
-                                            @if($canDelete)
-                                            <button @click="deleteSchedule({{ $schedule->id }})" class="p-1 text-gray-400 hover:text-red-600" title="O'chirish">
-                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                                            </button>
-                                            @else
-                                            <span class="p-1 text-gray-300" title="To'langan grafikni o'chirib bo'lmaydi">
-                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
-                                            </span>
-                                            @endif
+                                            <button @click="editing = true" class="p-1 text-slate-500 hover:text-blue-400"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg></button>
+                                            @if($canDelete)<button @click="deleteSchedule({{ $schedule->id }})" class="p-1 text-slate-500 hover:text-red-400"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>
+                                            @else<span class="p-1 text-slate-600"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg></span>@endif
                                         </div>
                                     </template>
                                     <template x-if="editing">
                                         <div class="flex items-center justify-center gap-1">
-                                            <button @click="updateSchedule({{ $schedule->id }}, form); editing = false" class="p-1 bg-green-500 text-white rounded hover:bg-green-600" title="Saqlash">
-                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                                            </button>
-                                            <button @click="editing = false" class="p-1 bg-gray-400 text-white rounded hover:bg-gray-500" title="Bekor qilish">
-                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-                                            </button>
+                                            <button @click="updateSchedule({{ $schedule->id }}, form); editing = false" class="p-1 bg-green-600 text-white rounded hover:bg-green-500"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></button>
+                                            <button @click="editing = false" class="p-1 bg-slate-600 text-white rounded hover:bg-slate-500"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
                                         </div>
                                     </template>
                                 </td>
@@ -526,102 +494,53 @@ function formatLotSum($num) {
             </div>
         </div>
         @else
-        <div class="px-4 py-8 text-center text-gray-500 text-sm">To'lov grafigi yo'q</div>
+        <div class="px-4 py-8 text-center text-slate-500 text-sm">To'lov grafigi yo'q</div>
         @endif
     </div>
 
     <!-- Recent Payments -->
     <div class="bg-slate-800/50 backdrop-blur border border-slate-700/50 rounded-xl overflow-hidden">
-        <div class="px-5 py-4 border-b border-slate-700/50 flex items-center justify-between bg-slate-800/80">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 bg-emerald-500/10 rounded-lg flex items-center justify-center">
-                    <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
-                </div>
-                <div>
-                    <h3 class="font-bold text-white">To'lovlar tarixi</h3>
-                    <p class="text-xs text-slate-400">Barcha kiritilgan to'lovlar</p>
-                </div>
-            </div>
-            <span class="inline-flex items-center px-3 py-1 text-sm font-bold bg-emerald-500/20 text-emerald-400 rounded-full">{{ $contract->payments->count() }}</span>
+        <div class="px-4 py-2 border-b border-slate-700/50 flex items-center justify-between bg-slate-800/80">
+            <h3 class="font-bold text-white text-sm">To'lovlar tarixi</h3>
+            <span class="text-xs text-emerald-400">{{ $contract->payments->count() }} ta</span>
         </div>
 
         @if($contract->payments->count() > 0)
         <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-                <thead class="bg-slate-800/50 text-xs text-slate-400 uppercase">
+            <table class="w-full text-xs">
+                <thead class="bg-slate-700/50 text-slate-300">
                     <tr>
-                        <th class="px-4 py-3 text-left font-medium">Sana</th>
-                        <th class="px-4 py-3 text-right font-medium">Summa</th>
-                        <th class="px-4 py-3 text-right font-medium">Qarz uchun</th>
-                        <th class="px-4 py-3 text-right font-medium">Penya</th>
-                        <th class="px-4 py-3 text-right font-medium">Avans</th>
-                        <th class="px-4 py-3 text-center font-medium">Turi</th>
+                        <th class="border border-slate-600 px-2 py-1 text-left">Sana</th>
+                        <th class="border border-slate-600 px-2 py-1 text-right">Summa</th>
+                        <th class="border border-slate-600 px-2 py-1 text-right">Qarz uchun</th>
+                        <th class="border border-slate-600 px-2 py-1 text-right">Penya</th>
+                        <th class="border border-slate-600 px-2 py-1 text-right">Avans</th>
+                        <th class="border border-slate-600 px-2 py-1 text-center">Turi</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-700/50">
+                <tbody class="text-slate-200">
                     @foreach($contract->payments->sortByDesc('tolov_sanasi')->take(15) as $payment)
-                    @php
-                        $paymentDate = \Carbon\Carbon::parse($payment->tolov_sanasi);
-                    @endphp
+                    @php $paymentDate = \Carbon\Carbon::parse($payment->tolov_sanasi); @endphp
                     <tr class="hover:bg-slate-700/30">
-                        <td class="px-4 py-3">
-                            <div class="font-bold text-white">{{ $paymentDate->format('d.m.Y') }}</div>
-                            <div class="text-xs text-slate-500">({{ $paymentDate->diffForHumans() }})</div>
-                        </td>
-                        <td class="px-4 py-3 text-right">
-                            <span class="text-lg font-bold text-emerald-400">+{{ number_format($payment->summa, 0, '', ' ') }}</span>
-                        </td>
-                        <td class="px-4 py-3 text-right {{ $payment->asosiy_qarz_uchun > 0 ? 'text-blue-400 font-medium' : 'text-slate-500' }}">
-                            {{ $payment->asosiy_qarz_uchun > 0 ? number_format($payment->asosiy_qarz_uchun, 0, '', ' ') : '—' }}
-                        </td>
-                        <td class="px-4 py-3 text-right {{ $payment->penya_uchun > 0 ? 'text-amber-400 font-medium' : 'text-slate-500' }}">
-                            {{ $payment->penya_uchun > 0 ? number_format($payment->penya_uchun, 0, '', ' ') : '—' }}
-                        </td>
-                        <td class="px-4 py-3 text-right {{ $payment->avans > 0 ? 'text-purple-400 font-medium' : 'text-slate-500' }}">
-                            {{ $payment->avans > 0 ? number_format($payment->avans, 0, '', ' ') : '—' }}
-                        </td>
-                        <td class="px-4 py-3 text-center">
-                            @php
-                                $typeColors = [
-                                    'naqd' => 'bg-green-100 text-green-700',
-                                    'plastik' => 'bg-blue-100 text-blue-700',
-                                    'bank' => 'bg-purple-100 text-purple-700',
-                                ];
-                                $typeNames = ['naqd' => 'Naqd', 'plastik' => 'Karta', 'bank' => 'Bank'];
-                            @endphp
-                            <span class="inline-flex items-center px-2 py-1 text-xs font-medium {{ $typeColors[$payment->tolov_turi] ?? 'bg-gray-100 text-gray-700' }} rounded-full">
-                                {{ $typeNames[$payment->tolov_turi] ?? $payment->tolov_turi ?? 'Naqd' }}
-                            </span>
-                        </td>
+                        <td class="border border-slate-600 px-2 py-1 text-white">{{ $paymentDate->format('d.m.Y') }}</td>
+                        <td class="border border-slate-600 px-2 py-1 text-right text-emerald-400 font-bold">+{{ number_format($payment->summa, 0, '', ' ') }}</td>
+                        <td class="border border-slate-600 px-2 py-1 text-right {{ $payment->asosiy_qarz_uchun > 0 ? 'text-blue-400' : 'text-slate-500' }}">{{ $payment->asosiy_qarz_uchun > 0 ? number_format($payment->asosiy_qarz_uchun, 0, '', ' ') : '—' }}</td>
+                        <td class="border border-slate-600 px-2 py-1 text-right {{ $payment->penya_uchun > 0 ? 'text-amber-400' : 'text-slate-500' }}">{{ $payment->penya_uchun > 0 ? number_format($payment->penya_uchun, 0, '', ' ') : '—' }}</td>
+                        <td class="border border-slate-600 px-2 py-1 text-right {{ $payment->avans > 0 ? 'text-purple-400' : 'text-slate-500' }}">{{ $payment->avans > 0 ? number_format($payment->avans, 0, '', ' ') : '—' }}</td>
+                        <td class="border border-slate-600 px-2 py-1 text-center text-slate-400">{{ ['naqd' => 'Naqd', 'plastik' => 'Karta', 'bank' => 'Bank'][$payment->tolov_turi] ?? 'Naqd' }}</td>
                     </tr>
                     @endforeach
                 </tbody>
             </table>
         </div>
         @else
-        <div class="px-5 py-12 text-center">
-            <div class="w-12 h-12 bg-gray-100 rounded-full mx-auto mb-3 flex items-center justify-center">
-                <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
-            </div>
-            <p class="text-gray-500 text-sm">Hali to'lov yo'q</p>
-            <p class="text-gray-400 text-xs mt-1">"+To'lov" tugmasini bosing</p>
-        </div>
+        <div class="px-4 py-6 text-center text-slate-500 text-sm">To'lovlar yo'q</div>
         @endif
 
         @if($contract->avans_balans > 0)
-        <div class="px-5 py-4 bg-gradient-to-r from-purple-50 to-white border-t border-purple-100">
-            <div class="flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                        <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                    </div>
-                    <div>
-                        <div class="text-sm font-medium text-purple-700">Avans balans (kredit)</div>
-                        <div class="text-xs text-purple-500">Keyingi to'lovlar uchun ishlatiladi</div>
-                    </div>
-                </div>
-                <span class="text-2xl font-bold text-purple-700">{{ number_format($contract->avans_balans, 0, '', ' ') }}</span>
-            </div>
+        <div class="px-4 py-2 border-t border-slate-700/50 flex items-center justify-between">
+            <span class="text-sm text-purple-400">Avans balans</span>
+            <span class="text-lg font-bold text-purple-400">{{ number_format($contract->avans_balans, 0, '', ' ') }}</span>
         </div>
         @endif
     </div>
