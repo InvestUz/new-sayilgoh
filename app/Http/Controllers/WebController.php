@@ -1258,12 +1258,13 @@ class WebController extends Controller
     }
 
     /**
-     * Parse FACT CSV and return payments that couldn't be matched
+     * Parse sherali_fact.csv and return payments that couldn't be matched
+     * Format: [0]Date [1]Account [2]DocNum [6]Amount [7]Purpose
      */
     private function getUnmatchedFromCsv()
     {
         $result = collect();
-        $csvPath = public_path('dataset/POYTAXT SAYILGOH FACT.csv');
+        $csvPath = public_path('dataset/sherali_fact.csv');
         if (!file_exists($csvPath)) return $result;
 
         $existingLots = Lot::pluck('id', 'lot_raqami')->toArray();
@@ -1274,33 +1275,56 @@ class WebController extends Controller
 
         $normalizedLots = [];
         foreach ($existingLots as $lot => $id) {
-            $normalized = preg_replace('/[^A-Za-z0-9]/', '', $lot);
-            $normalizedLots[strtoupper($normalized)] = $id;
+            $normalized = preg_replace('/[^0-9]/', '', $lot);
+            if ($normalized) $normalizedLots[$normalized] = $id;
         }
 
         $handle = fopen($csvPath, 'r');
         if (!$handle) return $result;
 
-        fgetcsv($handle, 0, ';');
+        fgetcsv($handle, 0, ';'); // Skip header
+        $rowNum = 1;
 
         while (($row = fgetcsv($handle, 0, ';')) !== false) {
-            if (count($row) < 10) continue;
+            $rowNum++;
+            if (count($row) < 7) continue;
 
             $date = trim($row[0] ?? '');
-            $lotNumber = trim($row[2] ?? '');
-            $inn = preg_replace('/[^0-9]/', '', $row[3] ?? '');
-            $tenantName = trim($row[4] ?? '');
-            $amount = (float) str_replace([' ', ','], ['', '.'], $row[9] ?? '0');
-            $docNumber = trim($row[1] ?? '');
+            $docNumber = trim($row[2] ?? '');
+            $amountStr = trim($row[6] ?? '');
             $purpose = trim($row[7] ?? '');
 
+            // Parse amount ("16 855 693,80" format)
+            $amount = (float) str_replace([' ', ','], ['', '.'], $amountStr);
             if ($amount <= 0) continue;
 
+            // Check if rental payment
+            $isRental = preg_match('/lotdan|SAYILGOH|auksion|ijara|L\d{5,}L/i', $purpose);
+            if (!$isRental) continue;
+
+            // Extract lot number from purpose (L{digits}L)
+            $lotNumber = '';
+            if (preg_match('/L(\d{6,10})L/i', $purpose, $m)) {
+                $lotNumber = $m[1];
+            }
+
+            // Extract INN/PINFL from purpose
+            $inn = '';
+            if (preg_match('/(?:INN|PINFL)\s*[:=]?\s*(\d{9,14})/i', $purpose, $m)) {
+                $inn = $m[1];
+            }
+
+            // Extract tenant name
+            $tenantName = '';
+            if (preg_match('/G`olib\s*[:=]?\s*"?([^"]+)"?\s*(?:MCHJ|XK|DUK|YaTT|xususiy|,|Buyurtmachi|$)/ui', $purpose, $m)) {
+                $tenantName = trim($m[1], ' "\'');
+            }
+
+            // Check if matched
             $matched = false;
 
-            if (!empty($lotNumber)) {
-                $normalized = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $lotNumber));
-                if (isset($normalizedLots[$normalized])) $matched = true;
+            if (!empty($lotNumber) && isset($normalizedLots[$lotNumber])) {
+                $matched = true;
             }
 
             if (!$matched && !empty($inn)) {
@@ -1318,12 +1342,12 @@ class WebController extends Controller
             if (!$matched) {
                 $result->push([
                     'date' => $date,
-                    'lot_number' => $lotNumber,
-                    'inn' => $inn,
-                    'tenant_name' => $tenantName,
+                    'lot_number' => $lotNumber ?: '-',
+                    'inn' => $inn ?: '-',
+                    'tenant_name' => $tenantName ?: '-',
                     'amount' => $amount,
                     'doc_number' => $docNumber,
-                    'purpose' => mb_substr($purpose, 0, 50),
+                    'purpose' => mb_substr($purpose, 0, 60),
                 ]);
             }
         }

@@ -14,6 +14,7 @@ class DatabaseSeeder extends Seeder
         // Use real data from dataset.csv
         $this->call([
             DatasetSeeder::class,
+            SheraliFactSeeder::class,
         ]);
     }
 }

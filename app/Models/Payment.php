@@ -168,18 +168,12 @@ class Payment extends Model
     {
         $prefix = 'TLV';
         $year = date('Y');
-        $lastPayment = self::whereYear('created_at', $year)
-            ->orderBy('id', 'desc')
-            ->first();
 
-        if ($lastPayment) {
-            $lastNumber = intval(substr($lastPayment->tolov_raqami, -6));
-            $newNumber = str_pad($lastNumber + 1, 6, '0', STR_PAD_LEFT);
-        } else {
-            $newNumber = '000001';
-        }
+        // Use microseconds + random for guaranteed uniqueness in bulk operations
+        $micro = substr(str_replace('.', '', microtime(true)), -10);
+        $random = str_pad(mt_rand(0, 99), 2, '0', STR_PAD_LEFT);
 
-        return "{$prefix}-{$year}-{$newNumber}";
+        return "{$prefix}-{$year}-{$micro}{$random}";
     }
 
     // ============================================
