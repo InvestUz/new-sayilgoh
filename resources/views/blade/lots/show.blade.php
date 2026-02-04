@@ -51,55 +51,55 @@ function formatLotSum($num) {
     <!-- Contract Stats -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <!-- Shartnoma summasi -->
-        <div class="bg-white rounded-lg border border-gray-200 p-5 relative overflow-hidden">
-            <div class="absolute top-4 right-4 w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        <div class="bg-slate-800/50 backdrop-blur rounded-xl border border-slate-700/50 p-5 relative overflow-hidden">
+            <div class="absolute top-4 right-4 w-10 h-10 bg-slate-700/50 rounded-lg flex items-center justify-center">
+                <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
             </div>
-            <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">SHARTNOMA SUMMASI</p>
-            <p class="text-4xl font-bold text-gray-900 mt-3">{!! formatLotSum($stats['jami_summa']) !!}</p>
-            <p class="text-xs text-gray-400 mt-4">Shartnoma bo'yicha jami</p>
+            <p class="text-xs text-slate-400 uppercase tracking-wide font-medium">SHARTNOMA SUMMASI</p>
+            <p class="text-4xl font-bold text-white mt-3">{!! formatLotSum($stats['jami_summa']) !!}</p>
+            <p class="text-xs text-slate-500 mt-4">Shartnoma bo'yicha jami</p>
         </div>
 
         <!-- To'langan -->
-        <div class="bg-white rounded-lg border border-gray-200 border-l-4 border-l-green-500 p-5 relative overflow-hidden">
-            <div class="absolute top-4 right-4 w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center">
-                <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+        <div class="bg-slate-800/50 backdrop-blur rounded-xl border border-slate-700/50 border-l-4 border-l-green-500 p-5 relative overflow-hidden">
+            <div class="absolute top-4 right-4 w-10 h-10 bg-green-500/10 rounded-lg flex items-center justify-center">
+                <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
             </div>
-            <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">TO'LANGAN</p>
-            <p class="text-4xl font-bold text-green-600 mt-3">{!! formatLotSum($stats['tolangan']) !!}</p>
-            <p class="text-xs text-gray-400 mt-4">Fakt tushum</p>
+            <p class="text-xs text-slate-400 uppercase tracking-wide font-medium">TO'LANGAN</p>
+            <p class="text-4xl font-bold text-green-400 mt-3">{!! formatLotSum($stats['tolangan']) !!}</p>
+            <p class="text-xs text-slate-500 mt-4">Fakt tushum</p>
         </div>
 
         <!-- Qoldiq -->
-        <div class="bg-white rounded-lg border border-gray-200 border-l-4 border-l-red-500 p-5 relative overflow-hidden">
-            <div class="absolute top-4 right-4 w-10 h-10 bg-red-50 rounded-lg flex items-center justify-center">
-                <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <div class="bg-slate-800/50 backdrop-blur rounded-xl border border-slate-700/50 border-l-4 border-l-red-500 p-5 relative overflow-hidden">
+            <div class="absolute top-4 right-4 w-10 h-10 bg-red-500/10 rounded-lg flex items-center justify-center">
+                <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
             </div>
-            <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">QOLDIQ</p>
-            <p class="text-4xl font-bold {{ $stats['qoldiq'] > 0 ? 'text-red-600' : 'text-gray-900' }} mt-3">{!! formatLotSum($stats['qoldiq']) !!}</p>
-            <p class="text-xs text-gray-400 mt-4">To'lanmagan summa</p>
+            <p class="text-xs text-slate-400 uppercase tracking-wide font-medium">QOLDIQ</p>
+            <p class="text-4xl font-bold {{ $stats['qoldiq'] > 0 ? 'text-red-400' : 'text-white' }} mt-3">{!! formatLotSum($stats['qoldiq']) !!}</p>
+            <p class="text-xs text-slate-500 mt-4">To'lanmagan summa</p>
         </div>
 
         <!-- Penya -->
-        <div class="bg-white rounded-lg border border-gray-200 border-l-4 border-l-amber-500 p-5 relative overflow-hidden">
-            <div class="absolute top-4 right-4 w-10 h-10 bg-amber-50 rounded-lg flex items-center justify-center">
-                <svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <div class="bg-slate-800/50 backdrop-blur rounded-xl border border-slate-700/50 border-l-4 border-l-amber-500 p-5 relative overflow-hidden">
+            <div class="absolute top-4 right-4 w-10 h-10 bg-amber-500/10 rounded-lg flex items-center justify-center">
+                <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
             </div>
-            <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">PENYA</p>
-            <p class="text-4xl font-bold {{ $stats['penya'] > 0 ? 'text-amber-600' : 'text-gray-900' }} mt-3">{!! formatLotSum($stats['penya']) !!}</p>
-            <p class="text-xs text-gray-400 mt-4">Kechikish uchun jarima</p>
+            <p class="text-xs text-slate-400 uppercase tracking-wide font-medium">PENYA</p>
+            <p class="text-4xl font-bold {{ $stats['penya'] > 0 ? 'text-amber-400' : 'text-white' }} mt-3">{!! formatLotSum($stats['penya']) !!}</p>
+            <p class="text-xs text-slate-500 mt-4">Kechikish uchun jarima</p>
         </div>
     </div>
 
     <!-- Progress -->
     @php $paidPercent = $stats['jami_summa'] > 0 ? round(($stats['tolangan'] / $stats['jami_summa']) * 100, 1) : 0; @endphp
-    <div class="bg-white rounded-lg border border-gray-200 p-5 mb-6">
+    <div class="bg-slate-800/50 backdrop-blur rounded-xl border border-slate-700/50 p-5 mb-6">
         <div class="flex justify-between text-sm mb-3">
-            <span class="font-medium text-gray-700">To'lov jarayoni</span>
-            <span class="font-bold text-gray-900">{{ $paidPercent }}%</span>
+            <span class="font-medium text-slate-300">To'lov jarayoni</span>
+            <span class="font-bold text-white">{{ $paidPercent }}%</span>
         </div>
-        <div class="h-3 bg-gray-100 rounded-full">
-            <div class="h-3 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all" style="width: {{ $paidPercent }}%"></div>
+        <div class="h-3 bg-slate-700 rounded-full">
+            <div class="h-3 bg-gradient-to-r from-blue-500 to-blue-400 rounded-full transition-all" style="width: {{ $paidPercent }}%"></div>
         </div>
     </div>
     @endif
@@ -107,23 +107,23 @@ function formatLotSum($num) {
     <!-- Main Grid: Lot Info + Contract/Tenant Info -->
     <div class="grid lg:grid-cols-3 gap-6 mb-6">
         <!-- Lot Image & Details -->
-        <div class="lg:col-span-2 bg-white border border-gray-200 rounded-lg overflow-hidden">
+        <div class="lg:col-span-2 bg-slate-800/50 backdrop-blur border border-slate-700/50 rounded-xl overflow-hidden">
             <div class="grid md:grid-cols-2 gap-0">
                 <!-- Image -->
-                <div class="bg-gray-100">
+                <div class="bg-slate-900">
                     <div class="aspect-square relative">
                         @if($mainImage)
                         <img id="mainImage" src="{{ asset('storage/' . $mainImage) }}" alt="{{ $lot->obyekt_nomi }}" class="w-full h-full object-cover">
                         @else
-                        <div class="w-full h-full flex items-center justify-center bg-gray-200">
-                            <svg class="w-24 h-24 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                        <div class="w-full h-full flex items-center justify-center bg-slate-800">
+                            <svg class="w-24 h-24 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                         </div>
                         @endif
                     </div>
                     @if(count($images) > 1)
-                    <div class="flex gap-1 p-2 overflow-x-auto bg-white border-t">
+                    <div class="flex gap-1 p-2 overflow-x-auto bg-slate-800 border-t border-slate-700">
                         @foreach($images as $index => $img)
-                        <button onclick="document.getElementById('mainImage').src='{{ asset('storage/' . $img) }}'" class="flex-shrink-0 w-14 h-14 rounded border overflow-hidden hover:border-gray-400 transition {{ $index === $mainIndex ? 'border-gray-900' : 'border-transparent' }}">
+                        <button onclick="document.getElementById('mainImage').src='{{ asset('storage/' . $img) }}'" class="flex-shrink-0 w-14 h-14 rounded border overflow-hidden hover:border-blue-400 transition {{ $index === $mainIndex ? 'border-blue-500' : 'border-slate-600' }}">
                             <img src="{{ asset('storage/' . $img) }}" alt="" class="w-full h-full object-cover">
                         </button>
                         @endforeach
@@ -133,14 +133,14 @@ function formatLotSum($num) {
 
                 <!-- Lot Details -->
                 <div class="p-5 space-y-1 text-sm">
-                    <div class="flex justify-between py-3 border-b border-gray-100"><span class="text-gray-500">Lot raqami</span><span class="font-bold text-gray-900">{{ $lot->lot_raqami }}</span></div>
-                    <div class="flex justify-between py-3 border-b border-gray-100"><span class="text-gray-500">Obyekt turi</span><span class="text-gray-900">{{ $lot->obyekt_turi_nomi }}</span></div>
-                    <div class="flex justify-between py-3 border-b border-gray-100"><span class="text-gray-500">Maydon</span><span class="font-bold text-gray-900">{{ number_format($lot->maydon, 2) }} m²</span></div>
-                    @if($lot->xonalar_soni)<div class="flex justify-between py-3 border-b border-gray-100"><span class="text-gray-500">Xonalar</span><span class="text-gray-900">{{ $lot->xonalar_soni }}</span></div>@endif
-                    @if($lot->qavat)<div class="flex justify-between py-3 border-b border-gray-100"><span class="text-gray-500">Qavat</span><span class="text-gray-900">{{ $lot->qavat }}{{ $lot->qavatlar_soni ? '/' . $lot->qavatlar_soni : '' }}</span></div>@endif
-                    @if($lot->kadastr_raqami)<div class="flex justify-between py-3 border-b border-gray-100"><span class="text-gray-500">Kadastr</span><span class="font-mono text-xs text-gray-900">{{ $lot->kadastr_raqami }}</span></div>@endif
-                    <div class="flex justify-between py-3 border-b border-gray-100"><span class="text-gray-500">Tuman</span><span class="text-gray-900">{{ $lot->tuman ?? '—' }}</span></div>
-                    <div class="flex justify-between py-3"><span class="text-gray-500">Manzil</span><span class="text-right max-w-[200px] text-gray-900">{{ $lot->toliq_manzil }}</span></div>
+                    <div class="flex justify-between py-3 border-b border-slate-700/50"><span class="text-slate-400">Lot raqami</span><span class="font-bold text-white">{{ $lot->lot_raqami }}</span></div>
+                    <div class="flex justify-between py-3 border-b border-slate-700/50"><span class="text-slate-400">Obyekt turi</span><span class="text-slate-200">{{ $lot->obyekt_turi_nomi }}</span></div>
+                    <div class="flex justify-between py-3 border-b border-slate-700/50"><span class="text-slate-400">Maydon</span><span class="font-bold text-white">{{ number_format($lot->maydon, 2) }} m²</span></div>
+                    @if($lot->xonalar_soni)<div class="flex justify-between py-3 border-b border-slate-700/50"><span class="text-slate-400">Xonalar</span><span class="text-slate-200">{{ $lot->xonalar_soni }}</span></div>@endif
+                    @if($lot->qavat)<div class="flex justify-between py-3 border-b border-slate-700/50"><span class="text-slate-400">Qavat</span><span class="text-slate-200">{{ $lot->qavat }}{{ $lot->qavatlar_soni ? '/' . $lot->qavatlar_soni : '' }}</span></div>@endif
+                    @if($lot->kadastr_raqami)<div class="flex justify-between py-3 border-b border-slate-700/50"><span class="text-slate-400">Kadastr</span><span class="font-mono text-xs text-slate-200">{{ $lot->kadastr_raqami }}</span></div>@endif
+                    <div class="flex justify-between py-3 border-b border-slate-700/50"><span class="text-slate-400">Tuman</span><span class="text-slate-200">{{ $lot->tuman ?? '—' }}</span></div>
+                    <div class="flex justify-between py-3"><span class="text-slate-400">Manzil</span><span class="text-right max-w-[200px] text-slate-200">{{ $lot->toliq_manzil }}</span></div>
                 </div>
             </div>
         </div>
@@ -148,39 +148,39 @@ function formatLotSum($num) {
         <!-- Tenant Info (if contract exists) -->
         <div class="space-y-4">
             @if($contract && $contract->tenant)
-            <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                <div class="px-5 py-4 border-b border-gray-200 flex items-center justify-between bg-gray-50">
-                    <h3 class="font-semibold text-gray-900">Ijarachi</h3>
-                    <a href="{{ route('registry.tenants.show', $contract->tenant) }}" class="text-xs text-blue-600 hover:text-blue-800 font-medium">Batafsil</a>
+            <div class="bg-slate-800/50 backdrop-blur border border-slate-700/50 rounded-xl overflow-hidden">
+                <div class="px-5 py-4 border-b border-slate-700/50 flex items-center justify-between bg-slate-800/80">
+                    <h3 class="font-semibold text-white">Ijarachi</h3>
+                    <a href="{{ route('registry.tenants.show', $contract->tenant) }}" class="text-xs text-blue-400 hover:text-blue-300 font-medium">Batafsil</a>
                 </div>
                 <div class="p-5 space-y-1 text-sm">
-                    <div class="flex justify-between py-2"><span class="text-gray-500">Nomi:</span><span class="text-gray-900 font-semibold">{{ $contract->tenant->name }}</span></div>
-                    <div class="flex justify-between py-2"><span class="text-gray-500">INN:</span><span class="text-gray-900 font-mono font-medium">{{ $contract->tenant->inn ?? '—' }}</span></div>
-                    <div class="flex justify-between py-2"><span class="text-gray-500">Direktor:</span><span class="text-gray-900">{{ $contract->tenant->director_name ?? '—' }}</span></div>
-                    <div class="flex justify-between py-2"><span class="text-gray-500">Telefon:</span><span class="text-gray-900 font-medium">{{ $contract->tenant->phone ?? '—' }}</span></div>
+                    <div class="flex justify-between py-2"><span class="text-slate-400">Nomi:</span><span class="text-white font-semibold">{{ $contract->tenant->name }}</span></div>
+                    <div class="flex justify-between py-2"><span class="text-slate-400">INN:</span><span class="text-slate-200 font-mono font-medium">{{ $contract->tenant->inn ?? '—' }}</span></div>
+                    <div class="flex justify-between py-2"><span class="text-slate-400">Direktor:</span><span class="text-slate-200">{{ $contract->tenant->director_name ?? '—' }}</span></div>
+                    <div class="flex justify-between py-2"><span class="text-slate-400">Telefon:</span><span class="text-slate-200 font-medium">{{ $contract->tenant->phone ?? '—' }}</span></div>
                 </div>
             </div>
             @endif
 
             @if($contract)
-            <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                <div class="px-5 py-4 border-b border-gray-200 bg-gray-50">
-                    <h3 class="font-semibold text-gray-900">Shartnoma</h3>
+            <div class="bg-slate-800/50 backdrop-blur border border-slate-700/50 rounded-xl overflow-hidden">
+                <div class="px-5 py-4 border-b border-slate-700/50 bg-slate-800/80">
+                    <h3 class="font-semibold text-white">Shartnoma</h3>
                 </div>
                 <div class="p-5 space-y-1 text-sm">
-                    <div class="flex justify-between py-2"><span class="text-gray-500">Raqam:</span><span class="text-gray-900 font-semibold">{{ $contract->shartnoma_raqami }}</span></div>
-                    <div class="flex justify-between py-2"><span class="text-gray-500">Muddat:</span><span class="text-gray-900">{{ $contract->shartnoma_muddati }} oy</span></div>
-                    <div class="flex justify-between py-2"><span class="text-gray-500">Boshlanish:</span><span class="text-gray-900">{{ \Carbon\Carbon::parse($contract->boshlanish_sanasi)->format('d.m.Y') }}</span></div>
-                    <div class="flex justify-between py-2"><span class="text-gray-500">Tugash:</span><span class="text-gray-900">{{ \Carbon\Carbon::parse($contract->tugash_sanasi)->format('d.m.Y') }}</span></div>
-                    <div class="flex justify-between py-2"><span class="text-gray-500">Oylik:</span><span class="text-gray-900 font-bold">{{ number_format($contract->oylik_tolovi, 0, '', ' ') }}</span></div>
+                    <div class="flex justify-between py-2"><span class="text-slate-400">Raqam:</span><span class="text-white font-semibold">{{ $contract->shartnoma_raqami }}</span></div>
+                    <div class="flex justify-between py-2"><span class="text-slate-400">Muddat:</span><span class="text-slate-200">{{ $contract->shartnoma_muddati }} oy</span></div>
+                    <div class="flex justify-between py-2"><span class="text-slate-400">Boshlanish:</span><span class="text-slate-200">{{ \Carbon\Carbon::parse($contract->boshlanish_sanasi)->format('d.m.Y') }}</span></div>
+                    <div class="flex justify-between py-2"><span class="text-slate-400">Tugash:</span><span class="text-slate-200">{{ \Carbon\Carbon::parse($contract->tugash_sanasi)->format('d.m.Y') }}</span></div>
+                    <div class="flex justify-between py-2"><span class="text-slate-400">Oylik:</span><span class="text-white font-bold">{{ number_format($contract->oylik_tolovi, 0, '', ' ') }}</span></div>
                 </div>
             </div>
             @else
-            <div class="bg-white border border-gray-200 rounded-lg p-8 text-center">
-                <div class="w-16 h-16 bg-gray-100 rounded-full mx-auto mb-4 flex items-center justify-center">
-                    <svg class="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            <div class="bg-slate-800/50 backdrop-blur border border-slate-700/50 rounded-xl p-8 text-center">
+                <div class="w-16 h-16 bg-slate-700 rounded-full mx-auto mb-4 flex items-center justify-center">
+                    <svg class="w-8 h-8 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                 </div>
-                <p class="text-gray-500 mb-4">Faol shartnoma yo'q</p>
+                <p class="text-slate-400 mb-4">Faol shartnoma yo'q</p>
                 <a href="{{ route('registry.contracts.create', ['lot_id' => $lot->id]) }}" class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                     Shartnoma yaratish
@@ -281,13 +281,13 @@ function formatLotSum($num) {
     @endphp
 
     <!-- Professional Government Dashboard Table -->
-    <div class="bg-white border border-gray-300 rounded mb-6 overflow-hidden">
+    <div class="bg-slate-800/50 backdrop-blur border border-slate-700/50 rounded-xl mb-6 overflow-hidden">
         <!-- Header -->
-        <div class="px-4 py-3 bg-gray-100 border-b border-gray-300 flex justify-between items-center">
-            <h3 class="font-bold text-gray-800 text-sm uppercase tracking-wide">To'lov jadvali</h3>
+        <div class="px-4 py-3 bg-slate-800/80 border-b border-slate-700/50 flex justify-between items-center">
+            <h3 class="font-bold text-white text-sm uppercase tracking-wide">To'lov jadvali</h3>
             <div class="flex items-center gap-2">
-                <button @click="showAddScheduleModal = true" class="px-3 py-1.5 border border-gray-400 text-gray-700 text-xs hover:bg-gray-200">+ Grafik</button>
-                <button @click="showPaymentModal = true" class="px-3 py-1.5 bg-blue-600 text-white text-xs hover:bg-blue-700">+ To'lov</button>
+                <button @click="showAddScheduleModal = true" class="px-3 py-1.5 border border-slate-600 text-slate-300 text-xs hover:bg-slate-700 rounded">+ Grafik</button>
+                <button @click="showPaymentModal = true" class="px-3 py-1.5 bg-blue-600 text-white text-xs hover:bg-blue-700 rounded">+ To'lov</button>
             </div>
         </div>
 
@@ -531,24 +531,24 @@ function formatLotSum($num) {
     </div>
 
     <!-- Recent Payments -->
-    <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <div class="px-5 py-4 border-b border-gray-200 flex items-center justify-between bg-gradient-to-r from-emerald-50 to-white">
+    <div class="bg-slate-800/50 backdrop-blur border border-slate-700/50 rounded-xl overflow-hidden">
+        <div class="px-5 py-4 border-b border-slate-700/50 flex items-center justify-between bg-slate-800/80">
             <div class="flex items-center gap-3">
-                <div class="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
-                    <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                <div class="w-10 h-10 bg-emerald-500/10 rounded-lg flex items-center justify-center">
+                    <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
                 </div>
                 <div>
-                    <h3 class="font-bold text-gray-900">To'lovlar tarixi</h3>
-                    <p class="text-xs text-gray-500">Barcha kiritilgan to'lovlar</p>
+                    <h3 class="font-bold text-white">To'lovlar tarixi</h3>
+                    <p class="text-xs text-slate-400">Barcha kiritilgan to'lovlar</p>
                 </div>
             </div>
-            <span class="inline-flex items-center px-3 py-1 text-sm font-bold bg-emerald-100 text-emerald-700 rounded-full">{{ $contract->payments->count() }}</span>
+            <span class="inline-flex items-center px-3 py-1 text-sm font-bold bg-emerald-500/20 text-emerald-400 rounded-full">{{ $contract->payments->count() }}</span>
         </div>
 
         @if($contract->payments->count() > 0)
         <div class="overflow-x-auto">
             <table class="w-full text-sm">
-                <thead class="bg-gray-50 text-xs text-gray-500 uppercase">
+                <thead class="bg-slate-800/50 text-xs text-slate-400 uppercase">
                     <tr>
                         <th class="px-4 py-3 text-left font-medium">Sana</th>
                         <th class="px-4 py-3 text-right font-medium">Summa</th>
@@ -558,26 +558,26 @@ function formatLotSum($num) {
                         <th class="px-4 py-3 text-center font-medium">Turi</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-gray-100">
+                <tbody class="divide-y divide-slate-700/50">
                     @foreach($contract->payments->sortByDesc('tolov_sanasi')->take(15) as $payment)
                     @php
                         $paymentDate = \Carbon\Carbon::parse($payment->tolov_sanasi);
                     @endphp
-                    <tr class="hover:bg-gray-50">
+                    <tr class="hover:bg-slate-700/30">
                         <td class="px-4 py-3">
-                            <div class="font-bold text-gray-900">{{ $paymentDate->format('d.m.Y') }}</div>
-                            <div class="text-xs text-gray-400">({{ $paymentDate->diffForHumans() }})</div>
+                            <div class="font-bold text-white">{{ $paymentDate->format('d.m.Y') }}</div>
+                            <div class="text-xs text-slate-500">({{ $paymentDate->diffForHumans() }})</div>
                         </td>
                         <td class="px-4 py-3 text-right">
-                            <span class="text-lg font-bold text-emerald-600">+{{ number_format($payment->summa, 0, '', ' ') }}</span>
+                            <span class="text-lg font-bold text-emerald-400">+{{ number_format($payment->summa, 0, '', ' ') }}</span>
                         </td>
-                        <td class="px-4 py-3 text-right {{ $payment->asosiy_qarz_uchun > 0 ? 'text-blue-600 font-medium' : 'text-gray-400' }}">
+                        <td class="px-4 py-3 text-right {{ $payment->asosiy_qarz_uchun > 0 ? 'text-blue-400 font-medium' : 'text-slate-500' }}">
                             {{ $payment->asosiy_qarz_uchun > 0 ? number_format($payment->asosiy_qarz_uchun, 0, '', ' ') : '—' }}
                         </td>
-                        <td class="px-4 py-3 text-right {{ $payment->penya_uchun > 0 ? 'text-amber-600 font-medium' : 'text-gray-400' }}">
+                        <td class="px-4 py-3 text-right {{ $payment->penya_uchun > 0 ? 'text-amber-400 font-medium' : 'text-slate-500' }}">
                             {{ $payment->penya_uchun > 0 ? number_format($payment->penya_uchun, 0, '', ' ') : '—' }}
                         </td>
-                        <td class="px-4 py-3 text-right {{ $payment->avans > 0 ? 'text-purple-600 font-medium' : 'text-gray-400' }}">
+                        <td class="px-4 py-3 text-right {{ $payment->avans > 0 ? 'text-purple-400 font-medium' : 'text-slate-500' }}">
                             {{ $payment->avans > 0 ? number_format($payment->avans, 0, '', ' ') : '—' }}
                         </td>
                         <td class="px-4 py-3 text-center">
@@ -796,8 +796,8 @@ function formatLotSum($num) {
     @endif
 
     <!-- Utilities -->
-    <div class="bg-white rounded-lg border border-gray-200 p-6 mt-6">
-        <h2 class="font-semibold text-gray-900 mb-4">Kommunikatsiyalar</h2>
+    <div class="bg-slate-800/50 backdrop-blur rounded-xl border border-slate-700/50 p-6 mt-6">
+        <h2 class="font-semibold text-white mb-4">Kommunikatsiyalar</h2>
         <div class="grid grid-cols-4 md:grid-cols-7 gap-3">
             @php
             $utilities = [
@@ -811,37 +811,37 @@ function formatLotSum($num) {
             ];
             @endphp
             @foreach($utilities as $util)
-            <div class="flex flex-col items-center gap-2 p-3 rounded-lg {{ $lot->{$util['key']} ? 'bg-green-50' : 'bg-gray-50' }}">
-                <div class="w-10 h-10 rounded-full flex items-center justify-center {{ $lot->{$util['key']} ? 'bg-green-100' : 'bg-gray-200' }}">
-                    <svg class="w-5 h-5 {{ $lot->{$util['key']} ? 'text-green-600' : 'text-gray-400' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="{{ $util['icon'] }}"/></svg>
+            <div class="flex flex-col items-center gap-2 p-3 rounded-lg {{ $lot->{$util['key']} ? 'bg-green-500/10' : 'bg-slate-700/50' }}">
+                <div class="w-10 h-10 rounded-full flex items-center justify-center {{ $lot->{$util['key']} ? 'bg-green-500/20' : 'bg-slate-600' }}">
+                    <svg class="w-5 h-5 {{ $lot->{$util['key']} ? 'text-green-400' : 'text-slate-500' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="{{ $util['icon'] }}"/></svg>
                 </div>
-                <span class="text-xs text-center {{ $lot->{$util['key']} ? 'text-green-700 font-medium' : 'text-gray-400' }}">{{ $util['name'] }}</span>
+                <span class="text-xs text-center {{ $lot->{$util['key']} ? 'text-green-400 font-medium' : 'text-slate-500' }}">{{ $util['name'] }}</span>
             </div>
             @endforeach
         </div>
     </div>
 
     @if($lot->tavsif)
-    <div class="bg-white rounded-lg border border-gray-200 p-6 mt-6">
-        <h2 class="font-semibold text-gray-900 mb-3">Muhim ma'lumotlar:</h2>
-        <p class="text-gray-600 whitespace-pre-wrap">{{ $lot->tavsif }}</p>
+    <div class="bg-slate-800/50 backdrop-blur rounded-xl border border-slate-700/50 p-6 mt-6">
+        <h2 class="font-semibold text-white mb-3">Muhim ma'lumotlar:</h2>
+        <p class="text-slate-300 whitespace-pre-wrap">{{ $lot->tavsif }}</p>
     </div>
     @endif
 
     <!-- Contract History -->
     @if($lot->contracts->count() > 1)
-    <div class="bg-white rounded-lg border border-gray-200 mt-6 overflow-hidden">
-        <div class="px-5 py-4 border-b border-gray-200 bg-gray-50"><h2 class="font-semibold text-gray-900">Shartnomalar tarixi</h2></div>
-        <div class="divide-y">
+    <div class="bg-slate-800/50 backdrop-blur rounded-xl border border-slate-700/50 mt-6 overflow-hidden">
+        <div class="px-5 py-4 border-b border-slate-700/50 bg-slate-800/80"><h2 class="font-semibold text-white">Shartnomalar tarixi</h2></div>
+        <div class="divide-y divide-slate-700/50">
             @foreach($lot->contracts->where('holat', '!=', 'faol') as $oldContract)
             <div class="flex items-center justify-between p-4">
                 <div>
-                    <p class="font-medium">{{ $oldContract->shartnoma_raqami }}</p>
-                    <p class="text-sm text-gray-400">{{ $oldContract->tenant->name ?? '-' }}</p>
+                    <p class="font-medium text-white">{{ $oldContract->shartnoma_raqami }}</p>
+                    <p class="text-sm text-slate-400">{{ $oldContract->tenant->name ?? '-' }}</p>
                 </div>
                 <div class="text-right">
-                    <p class="font-medium">{{ number_format($oldContract->shartnoma_summasi, 0, '.', ' ') }}</p>
-                    <span class="text-xs px-2 py-1 rounded bg-gray-100 text-gray-600">{{ $oldContract->holat_nomi }}</span>
+                    <p class="font-medium text-white">{{ number_format($oldContract->shartnoma_summasi, 0, '.', ' ') }}</p>
+                    <span class="text-xs px-2 py-1 rounded bg-slate-700 text-slate-300">{{ $oldContract->holat_nomi }}</span>
                 </div>
             </div>
             @endforeach
