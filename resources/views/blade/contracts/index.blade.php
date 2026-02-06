@@ -74,7 +74,7 @@ $jamiSumma = \App\Models\Contract::sum('shartnoma_summasi');
                     @forelse($contracts as $contract)
                     <tr>
                         <td>
-                            <a href="{{ route('contracts.show', $contract) }}" class="text-cyan font-medium hover:underline">{{ $contract->shartnoma_raqami }}</a>
+                            <a href="{{ route('registry.contracts.show', $contract) }}" class="text-cyan font-medium hover:underline">{{ $contract->shartnoma_raqami }}</a>
                             <p class="text-xs text-[#64748b]">{{ $contract->shartnoma_sanasi->format('d.m.Y') }}</p>
                         </td>
                         <td>
@@ -107,8 +107,8 @@ $jamiSumma = \App\Models\Contract::sum('shartnoma_summasi');
                             @endif
                         </td>
                         <td class="text-right">
-                            <a href="{{ route('contracts.show', $contract) }}" class="text-[#38bdf8] hover:underline text-xs mr-2">Ko'rish</a>
-                            <a href="{{ route('payments.create', ['contract_id' => $contract->id]) }}" class="text-[#22c55e] hover:underline text-xs">To'lov</a>
+                            <a href="{{ route('registry.contracts.show', $contract) }}" class="text-[#38bdf8] hover:underline text-xs mr-2">Ko'rish</a>
+                            <a href="{{ route('registry.payments.create', ['contract_id' => $contract->id]) }}" class="text-[#22c55e] hover:underline text-xs">To'lov</a>
                         </td>
                     </tr>
                     @empty

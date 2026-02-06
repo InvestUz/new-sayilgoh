@@ -2,7 +2,7 @@
 @section('title', $contract->shartnoma_raqami)
 @section('breadcrumb')
 <nav class="flex items-center gap-2 text-sm">
-    <a href="{{ route('contracts.index') }}" class="text-gray-400 hover:text-gray-600">Shartnomalar</a>
+    <a href="{{ route('registry', ['tab' => 'contracts']) }}" class="text-gray-400 hover:text-gray-600">Shartnomalar</a>
     <span class="text-gray-300">/</span>
     <span class="text-gray-900">{{ $contract->shartnoma_raqami }}</span>
 </nav>
@@ -11,7 +11,7 @@
 <button onclick="window.print()" class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded">
     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
 </button>
-<a href="{{ route('contracts.edit', $contract) }}" class="px-4 py-2 bg-gray-900 text-white rounded text-sm hover:bg-gray-800">Tahrirlash</a>
+<a href="{{ route('registry.contracts.edit', $contract) }}" class="px-4 py-2 bg-gray-900 text-white rounded text-sm hover:bg-gray-800">Tahrirlash</a>
 @endsection
 
 @section('content')

@@ -172,7 +172,7 @@
                     @php $qarz = $contract->paymentSchedules->sum('qoldiq_summa'); @endphp
                     <tr class="hover:bg-gray-50">
                         <td class="px-5 py-4">
-                            <a href="{{ route('contracts.show', $contract) }}" class="text-gray-900 hover:text-blue-600 font-semibold">{{ $contract->shartnoma_raqami }}</a>
+                            <a href="{{ route('registry.contracts.show', $contract) }}" class="text-gray-900 hover:text-blue-600 font-semibold">{{ $contract->shartnoma_raqami }}</a>
                         </td>
                         <td class="px-5 py-4">
                             @if($contract->lot)

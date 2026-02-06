@@ -10,7 +10,7 @@ $jismoniy = \App\Models\Tenant::where('type', 'jismoniy')->count();
 @endphp
 
 @section('header-actions')
-<a href="{{ route('tenants.create') }}" class="btn btn-primary">
+<a href="{{ route('registry.tenants.create') }}" class="btn btn-primary">
     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
     Yangi ijarachi
 </a>
@@ -57,7 +57,7 @@ $jismoniy = \App\Models\Tenant::where('type', 'jismoniy')->count();
                     <h3 class="card-title">Ijarachilar ro'yxati</h3>
                     <p class="text-xs text-[#64748b] mt-1">{{ $tenants->total() }} ta ijarachi</p>
                 </div>
-                <form action="{{ route('tenants.index') }}" method="GET" class="flex items-center gap-2">
+                <form action="{{ route('registry', ['tab' => 'tenants']) }}" method="GET" class="flex items-center gap-2">
                     <div class="relative">
                         <input type="text" name="search" value="{{ request('search') }}" placeholder="Qidirish..."
                             class="form-input pl-10 w-64">
@@ -67,7 +67,7 @@ $jismoniy = \App\Models\Tenant::where('type', 'jismoniy')->count();
                     </div>
                     <button type="submit" class="btn btn-primary">Qidirish</button>
                     @if(request('search'))
-                    <a href="{{ route('tenants.index') }}" class="btn btn-secondary">Tozalash</a>
+                    <a href="{{ route('registry', ['tab' => 'tenants']) }}" class="btn btn-secondary">Tozalash</a>
                     @endif
                 </form>
             </div>

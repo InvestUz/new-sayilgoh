@@ -2,7 +2,7 @@
 @section('title', isset($contract) ? 'Tahrirlash' : 'Yangi shartnoma')
 @section('breadcrumb')
 <nav class="flex items-center gap-2 text-sm">
-    <a href="{{ route('contracts.index') }}" class="text-gray-400 hover:text-gray-600">Shartnomalar</a>
+    <a href="{{ route('registry', ['tab' => 'contracts']) }}" class="text-gray-400 hover:text-gray-600">Shartnomalar</a>
     <span class="text-gray-300">/</span>
     <span class="text-gray-900">{{ isset($contract) ? 'Tahrirlash' : 'Yangi' }}</span>
 </nav>
@@ -83,7 +83,7 @@
 
         <!-- Buttons -->
         <div class="flex justify-end gap-3">
-            <a href="{{ route('contracts.index') }}" class="px-4 py-2 border rounded text-sm text-gray-600 hover:bg-gray-50">Bekor qilish</a>
+            <a href="{{ route('registry', ['tab' => 'contracts']) }}" class="px-4 py-2 border rounded text-sm text-gray-600 hover:bg-gray-50">Bekor qilish</a>
             <button type="submit" class="px-4 py-2 bg-gray-900 text-white rounded text-sm hover:bg-gray-800" :disabled="loading">
                 <span x-text="loading ? '...' : '{{ isset($contract) ? 'Saqlash' : 'Yaratish' }}'"></span>
             </button>

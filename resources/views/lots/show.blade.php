@@ -50,7 +50,7 @@
         <div class="bg-white border rounded-lg">
             <div class="px-4 py-3 border-b"><h3 class="text-sm font-medium text-gray-900">Joriy shartnoma</h3></div>
             <div class="p-4">
-                <a href="{{ route('contracts.show', $activeContract) }}" class="text-lg font-medium text-gray-900 hover:underline">{{ $activeContract->shartnoma_raqami }}</a>
+                <a href="{{ route('registry.contracts.show', $activeContract) }}" class="text-lg font-medium text-gray-900 hover:underline">{{ $activeContract->shartnoma_raqami }}</a>
                 <p class="text-sm text-gray-500 mt-1">{{ $activeContract->tenant->name ?? '—' }}</p>
                 <div class="flex justify-between mt-4 text-sm">
                     <span class="text-gray-500">Summa:</span>
@@ -80,7 +80,7 @@
             <tbody class="divide-y divide-gray-100">
                 @forelse($lot->contracts as $contract)
                 <tr class="hover:bg-gray-50">
-                    <td class="px-4 py-3"><a href="{{ route('contracts.show', $contract) }}" class="text-gray-900 hover:underline">{{ $contract->shartnoma_raqami }}</a></td>
+                    <td class="px-4 py-3"><a href="{{ route('registry.contracts.show', $contract) }}" class="text-gray-900 hover:underline">{{ $contract->shartnoma_raqami }}</a></td>
                     <td class="px-4 py-3 text-gray-500">{{ $contract->tenant->name ?? '—' }}</td>
                     <td class="px-4 py-3 text-right text-gray-900">{{ number_format($contract->shartnoma_summasi, 0, '', ' ') }}</td>
                     <td class="px-4 py-3 text-center"><span class="px-2 py-0.5 text-xs rounded {{ $contract->holat === 'faol' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500' }}">{{ $contract->holat === 'faol' ? 'Faol' : 'Yakunlangan' }}</span></td>
