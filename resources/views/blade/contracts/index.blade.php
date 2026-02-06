@@ -79,7 +79,7 @@ $jamiSumma = \App\Models\Contract::sum('shartnoma_summasi');
                         </td>
                         <td>
                             @if($contract->tenant)
-                            <a href="{{ route('tenants.show', $contract->tenant) }}" class="hover:text-[#38bdf8]">{{ $contract->tenant->name }}</a>
+                            <a href="{{ route('registry.tenants.show', $contract->tenant) }}" class="hover:text-[#38bdf8]">{{ $contract->tenant->name }}</a>
                             @else
                             <span class="text-[#64748b]">—</span>
                             @endif

@@ -89,7 +89,7 @@ $jismoniy = \App\Models\Tenant::where('type', 'jismoniy')->count();
                     @forelse($tenants as $tenant)
                     <tr>
                         <td>
-                            <a href="{{ route('tenants.show', $tenant) }}" class="text-cyan font-medium hover:underline">{{ $tenant->name }}</a>
+                            <a href="{{ route('registry.tenants.show', $tenant) }}" class="text-cyan font-medium hover:underline">{{ $tenant->name }}</a>
                         </td>
                         <td class="font-mono text-xs">{{ $tenant->inn ?? '—' }}</td>
                         <td>{{ $tenant->phone ?? '—' }}</td>
@@ -109,9 +109,9 @@ $jismoniy = \App\Models\Tenant::where('type', 'jismoniy')->count();
                             @endif
                         </td>
                         <td class="text-right">
-                            <a href="{{ route('tenants.show', $tenant) }}" class="text-[#38bdf8] hover:underline text-xs mr-2">Ko'rish</a>
-                            <a href="{{ route('tenants.edit', $tenant) }}" class="text-[#64748b] hover:text-white text-xs mr-2">Tahrir</a>
-                            <form action="{{ route('tenants.destroy', $tenant) }}" method="POST" class="inline" onsubmit="return confirm('O\'chirishni tasdiqlaysizmi?')">
+                            <a href="{{ route('registry.tenants.show', $tenant) }}" class="text-[#38bdf8] hover:underline text-xs mr-2">Ko'rish</a>
+                            <a href="{{ route('registry.tenants.edit', $tenant) }}" class="text-[#64748b] hover:text-white text-xs mr-2">Tahrir</a>
+                            <form action="{{ route('registry.tenants.destroy', $tenant) }}" method="POST" class="inline" onsubmit="return confirm('O\'chirishni tasdiqlaysizmi?')">
                                 @csrf @method('DELETE')
                                 <button type="submit" class="text-[#64748b] hover:text-[#ef4444] text-xs">O'chir</button>
                             </form>

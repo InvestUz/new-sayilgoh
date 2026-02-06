@@ -67,7 +67,7 @@
             </div>
             <div class="p-4 space-y-3 text-sm">
                 @if($contract->tenant)
-                <div class="flex justify-between"><span class="text-gray-500">Nomi:</span><a href="{{ route('tenants.show', $contract->tenant) }}" class="text-gray-900 hover:underline">{{ $contract->tenant->name }}</a></div>
+                <div class="flex justify-between"><span class="text-gray-500">Nomi:</span><a href="{{ route('registry.tenants.show', $contract->tenant) }}" class="text-gray-900 hover:underline">{{ $contract->tenant->name }}</a></div>
                 <div class="flex justify-between"><span class="text-gray-500">INN:</span><span class="text-gray-900">{{ $contract->tenant->inn ?? '—' }}</span></div>
                 <div class="flex justify-between"><span class="text-gray-500">Direktor:</span><span class="text-gray-900">{{ $contract->tenant->direktor_ismi ?? '—' }}</span></div>
                 <div class="flex justify-between"><span class="text-gray-500">Telefon:</span><span class="text-gray-900">{{ $contract->tenant->telefon ?? '—' }}</span></div>

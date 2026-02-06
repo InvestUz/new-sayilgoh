@@ -3,7 +3,7 @@
 @section('header', $tenant->name)
 @section('subheader', 'Ijarachi tafsilotlari')
 @section('header-actions')
-<a href="{{ route('tenants.edit', $tenant) }}" class="btn btn-primary">
+<a href="{{ route('registry.tenants.edit', $tenant) }}" class="btn btn-primary">
     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
     Tahrirlash
 </a>
@@ -82,7 +82,7 @@
         <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
             <div class="px-5 py-4 border-b border-gray-200 flex items-center justify-between bg-gray-50">
                 <h3 class="font-semibold text-gray-900">Asosiy ma'lumotlar</h3>
-                <a href="{{ route('tenants.edit', $tenant) }}" class="text-xs text-blue-600 hover:text-blue-800 font-medium">Tahrirlash</a>
+                <a href="{{ route('registry.tenants.edit', $tenant) }}" class="text-xs text-blue-600 hover:text-blue-800 font-medium">Tahrirlash</a>
             </div>
             <div class="p-5 space-y-1 text-sm">
                 <div class="flex justify-between py-3 border-b border-gray-100"><span class="text-gray-500">Nomi:</span><span class="text-gray-900 font-semibold">{{ $tenant->name }}</span></div>
@@ -105,7 +105,7 @@
         <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
             <div class="px-5 py-4 border-b border-gray-200 flex items-center justify-between bg-gray-50">
                 <h3 class="font-semibold text-gray-900">Bank rekvizitlari</h3>
-                <a href="{{ route('tenants.edit', $tenant) }}" class="text-xs text-blue-600 hover:text-blue-800 font-medium">Tahrirlash</a>
+                <a href="{{ route('registry.tenants.edit', $tenant) }}" class="text-xs text-blue-600 hover:text-blue-800 font-medium">Tahrirlash</a>
             </div>
             <div class="p-5 space-y-1 text-sm">
                 <div class="flex justify-between py-3 border-b border-gray-100"><span class="text-gray-500">Bank:</span><span class="text-gray-900 font-medium">{{ $tenant->bank_name ?? '—' }}</span></div>
