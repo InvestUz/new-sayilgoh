@@ -15,19 +15,19 @@
 
     <!-- Stats -->
     <div class="grid grid-cols-4 gap-4">
-        <div class="bg-white border rounded-lg p-4">
-            <p class="text-xs text-gray-400 uppercase">Maydon</p>
-            <p class="text-2xl font-semibold text-gray-900 mt-1">{{ number_format($lot->maydoni ?? 0, 1) }} <span class="text-sm font-normal text-gray-400">m²</span></p>
+        <div class="bg-slate-800/50 backdrop-blur rounded-xl border border-slate-700/50 p-4">
+            <p class="text-xs text-slate-400 uppercase">Maydon</p>
+            <p class="text-2xl font-semibold text-white mt-1">{{ number_format($lot->maydoni ?? 0, 1) }} <span class="text-sm font-normal text-slate-400">m²</span></p>
         </div>
-        <div class="bg-white border rounded-lg p-4">
-            <p class="text-xs text-gray-400 uppercase">Narxi</p>
-            <p class="text-xl font-semibold text-gray-900 mt-1">{{ number_format($lot->narxi ?? 0, 0, '', ' ') }} <span class="text-sm font-normal text-gray-400">so'm/m²</span></p>
+        <div class="bg-slate-800/50 backdrop-blur rounded-xl border border-slate-700/50 p-4">
+            <p class="text-xs text-slate-400 uppercase">Narxi</p>
+            <p class="text-xl font-semibold text-white mt-1">{{ number_format($lot->narxi ?? 0, 0, '', ' ') }} <span class="text-sm font-normal text-slate-400">so'm/m²</span></p>
         </div>
-        <div class="bg-white border rounded-lg p-4">
-            <p class="text-xs text-gray-400 uppercase">Oylik</p>
-            <p class="text-xl font-semibold text-gray-900 mt-1">{{ number_format(($lot->maydoni ?? 0) * ($lot->narxi ?? 0), 0, '', ' ') }}</p>
+        <div class="bg-slate-800/50 backdrop-blur rounded-xl border border-slate-700/50 p-4">
+            <p class="text-xs text-slate-400 uppercase">Oylik</p>
+            <p class="text-xl font-semibold text-white mt-1">{{ number_format(($lot->maydoni ?? 0) * ($lot->narxi ?? 0), 0, '', ' ') }}</p>
         </div>
-        <div class="bg-white border rounded-lg p-4">
+        <div class="bg-slate-800/50 backdrop-blur rounded-xl border border-slate-700/50 p-4">
             <p class="text-xs text-gray-400 uppercase">Shartnomalar</p>
             <p class="text-2xl font-semibold text-gray-900 mt-1">{{ $lot->contracts->count() }}</p>
         </div>

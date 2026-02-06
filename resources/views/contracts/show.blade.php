@@ -1,4 +1,4 @@
-@extends('layouts.app')
+@extends('layouts.dark')
 @section('title', $contract->shartnoma_raqami)
 @section('breadcrumb')
 <nav class="flex items-center gap-2 text-sm">

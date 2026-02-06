@@ -13,21 +13,21 @@
 <div class="space-y-6">
     <!-- Stats -->
     <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div class="bg-white rounded-lg border border-gray-200 p-5">
+        <div class="bg-slate-800/50 backdrop-blur rounded-xl border border-slate-700/50 p-5">
             <div class="flex items-start justify-between">
                 <div>
-                    <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">FAOL LOTLAR</p>
-                    <p class="text-4xl font-bold text-gray-900 mt-2">{{ $stats['faol_lotlar'] }} <span class="text-lg font-normal text-gray-400">ta</span></p>
+                    <p class="text-xs text-slate-400 uppercase tracking-wide font-medium">FAOL LOTLAR</p>
+                    <p class="text-4xl font-bold text-white mt-2">{{ $stats['faol_lotlar'] }} <span class="text-lg font-normal text-slate-400">ta</span></p>
                 </div>
-                <div class="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                    <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+                <div class="w-10 h-10 bg-slate-700/50 rounded-lg flex items-center justify-center">
+                    <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
                 </div>
             </div>
         </div>
-        <div class="bg-white rounded-lg border border-gray-200 border-l-4 border-l-blue-500 p-5">
+        <div class="bg-slate-800/50 backdrop-blur rounded-xl border border-slate-700/50 border-l-4 border-l-blue-500 p-5">
             <div class="flex items-start justify-between">
                 <div>
-                    <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">JAMI SUMMA</p>
+                    <p class="text-xs text-slate-400 uppercase tracking-wide font-medium">JAMI SUMMA</p>
                     @php
                     $js = $stats['jami_summa'];
                     if ($js >= 1000000000) { $fs = number_format($js / 1000000000, 2, ',', ' '); $sx = 'mlrd'; }
