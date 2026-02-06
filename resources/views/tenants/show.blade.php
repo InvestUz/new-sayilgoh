@@ -124,7 +124,7 @@
         @if($lots->count() > 0)
         <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 p-5">
             @foreach($lots as $lot)
-            <a href="{{ route('lots.show', $lot) }}" class="block border border-gray-200 rounded-lg p-5 hover:border-blue-400 hover:shadow-md transition group">
+            <a href="{{ route('registry.lots.show', $lot) }}" class="block border border-gray-200 rounded-lg p-5 hover:border-blue-400 hover:shadow-md transition group">
                 <div class="flex items-start justify-between">
                     <div>
                         <span class="text-lg font-bold text-gray-900 group-hover:text-blue-600">Lot {{ $lot->lot_raqami }}</span>
@@ -176,7 +176,7 @@
                         </td>
                         <td class="px-5 py-4">
                             @if($contract->lot)
-                            <a href="{{ route('lots.show', $contract->lot) }}" class="text-blue-600 hover:text-blue-800">Lot {{ $contract->lot->lot_raqami }}</a>
+                            <a href="{{ route('registry.lots.show', $contract->lot) }}" class="text-blue-600 hover:text-blue-800">Lot {{ $contract->lot->lot_raqami }}</a>
                             @else
                             <span class="text-gray-400">—</span>
                             @endif

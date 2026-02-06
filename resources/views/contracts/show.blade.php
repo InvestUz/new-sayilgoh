@@ -84,7 +84,7 @@
             </div>
             <div class="p-4 space-y-3 text-sm">
                 @if($contract->lot)
-                <div class="flex justify-between"><span class="text-gray-500">Lot:</span><a href="{{ route('lots.show', $contract->lot) }}" class="text-gray-900 hover:underline">{{ $contract->lot->lot_raqami }}</a></div>
+                <div class="flex justify-between"><span class="text-gray-500">Lot:</span><a href="{{ route('registry.lots.show', $contract->lot) }}" class="text-gray-900 hover:underline">{{ $contract->lot->lot_raqami }}</a></div>
                 <div class="flex justify-between"><span class="text-gray-500">Tuman:</span><span class="text-gray-900">{{ $contract->lot->tuman ?? '—' }}</span></div>
                 <div class="flex justify-between"><span class="text-gray-500">Ko'cha:</span><span class="text-gray-900">{{ $contract->lot->kocha ?? '—' }}</span></div>
                 <div class="flex justify-between"><span class="text-gray-500">Maydon:</span><span class="text-gray-900">{{ number_format($contract->lot->maydoni ?? 0, 1) }} m²</span></div>

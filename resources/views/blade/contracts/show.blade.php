@@ -106,7 +106,7 @@ function formatSumShow($num) {
                 <div class="flex justify-between py-3 border-b border-gray-100">
                     <span class="text-gray-500">Lot</span>
                     @if($contract->lot)
-                    <a href="{{ route('lots.show', $contract->lot) }}" class="font-semibold text-blue-600 hover:text-blue-800">{{ $contract->lot->lot_raqami }}</a>
+                    <a href="{{ route('registry.lots.show', $contract->lot) }}" class="font-semibold text-blue-600 hover:text-blue-800">{{ $contract->lot->lot_raqami }}</a>
                     @else
                     <span class="text-gray-400">—</span>
                     @endif

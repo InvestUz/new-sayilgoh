@@ -86,7 +86,7 @@ $jamiSumma = \App\Models\Contract::sum('shartnoma_summasi');
                         </td>
                         <td>
                             @if($contract->lot)
-                            <a href="{{ route('lots.show', $contract->lot) }}" class="text-cyan hover:underline">{{ $contract->lot->lot_raqami }}</a>
+                            <a href="{{ route('registry.lots.show', $contract->lot) }}" class="text-cyan hover:underline">{{ $contract->lot->lot_raqami }}</a>
                             @else
                             <span class="text-[#64748b]">—</span>
                             @endif
