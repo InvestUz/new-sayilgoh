@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\PenaltyCalculatorService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -10,6 +11,11 @@ use Carbon\Carbon;
 
 /**
  * To'lov Grafigi (Payment Schedule) modeli
+ * 
+ * Penalty calculation follows contract rules (Section 8.2):
+ * - Rate: 0.4% per day on overdue amount
+ * - Cap: 50% maximum of overdue amount
+ * - Only applies when payment_date > due_date
  */
 class PaymentSchedule extends Model
 {
@@ -41,9 +47,12 @@ class PaymentSchedule extends Model
         'tolangan_penya' => 'decimal:2',
     ];
 
-    // Penya foizi (kunlik)
-    const PENYA_FOIZI = 0.4; // 0.4% per day
+    // Penalty constants (from contract section 8.2)
+    // Daily rate: 0.4% = 0.004
+    const PENYA_FOIZI = 0.4; // 0.4% per day (displayed as percentage)
+    const PENYA_RATE = 0.004; // 0.4% per day (decimal for calculation)
     const MAX_PENYA_FOIZI = 50; // Maximum 50% of debt
+    const MAX_PENYA_RATE = 0.5; // Maximum 50% (decimal for calculation)
 
     // ============================================
     // RELATIONSHIPS
@@ -135,101 +144,152 @@ class PaymentSchedule extends Model
     // ============================================
 
     /**
-     * Penyani hisoblash
-     * Qoida: Har kuni 0.4%, lekin 50% dan oshmasligi kerak
-     * @param bool $save - Natijani saqlash kerakmi
+     * Calculate penalty as of current date
+     * Uses PenaltyCalculatorService for contract-compliant calculation
+     * 
+     * Contract Rules:
+     * - Rate: 0.4% per day
+     * - Cap: 50% of overdue amount
+     * - Only applies when current date > due date
+     * 
+     * @param bool $save - Whether to persist the result
+     * @return float Calculated penalty amount
      */
     public function calculatePenya(bool $save = true): float
     {
-        if ($this->holat === 'tolangan') {
-            return 0;
-        }
-
-        $oxirgiMuddat = Carbon::parse($this->oxirgi_muddat);
-        $bugun = Carbon::today();
-
-        if ($bugun->lte($oxirgiMuddat)) {
-            return 0;
-        }
-
-        $kechikishKunlari = $oxirgiMuddat->diffInDays($bugun);
-        $this->kechikish_kunlari = $kechikishKunlari;
-
-        // Penya hisoblash: qoldiq_summa * 0.4% * kunlar
-        $penya = $this->qoldiq_summa * (self::PENYA_FOIZI / 100) * $kechikishKunlari;
-
-        // Maximum 50% dan oshmasligi kerak
-        $maxPenya = $this->qoldiq_summa * (self::MAX_PENYA_FOIZI / 100);
-        $penya = min($penya, $maxPenya);
-
-        $this->penya_summasi = $penya;
-
-        if ($save) {
-            $this->save();
-        }
-
-        return $penya;
+        return $this->calculatePenyaAtDate(Carbon::today(), $save);
     }
 
     /**
-     * Penyani BELGILANGAN SANAGA nisbatan hisoblash
-     * To'lov sanasida penya qancha bo'lganini aniqlash uchun
-     * @param Carbon $tolovSanasi - To'lov qilingan sana
-     * @param bool $save - Natijani saqlash kerakmi
+     * Calculate penalty at a specific date
+     * This is the PRIMARY penalty calculation method
+     * 
+     * Business Rules (Contract Section 8.2):
+     * 1. If payment_date <= due_date → penalty = 0
+     * 2. penalty = overdue_amount * 0.004 * overdue_days
+     * 3. penalty <= overdue_amount * 0.5 (cap)
+     * 4. overdue_days = max(0, payment_date - due_date)
+     * 
+     * @param Carbon $tolovSanasi - The date to calculate penalty as of
+     * @param bool $save - Whether to persist the result
+     * @return float Calculated penalty amount
      */
     public function calculatePenyaAtDate(Carbon $tolovSanasi, bool $save = true): float
     {
+        // Rule: Fully paid schedules have no new penalty
         if ($this->holat === 'tolangan') {
-            return 0;
+            return (float) $this->penya_summasi;
         }
 
         $oxirgiMuddat = Carbon::parse($this->oxirgi_muddat);
 
-        // Agar to'lov sanasi oxirgi muddatdan oldin bo'lsa - penya yo'q
+        // Rule 1: If payment_date <= due_date → penalty = 0
         if ($tolovSanasi->lte($oxirgiMuddat)) {
+            $this->kechikish_kunlari = 0;
+            $this->penya_summasi = 0;
+            
+            if ($save) {
+                $this->save();
+            }
             return 0;
         }
 
-        // To'lov sanasigacha bo'lgan kechikish kunlari
+        // Rule 4: Calculate overdue days
         $kechikishKunlari = $oxirgiMuddat->diffInDays($tolovSanasi);
         $this->kechikish_kunlari = $kechikishKunlari;
 
-        // Penya hisoblash: qoldiq_summa * 0.4% * kunlar
-        $penya = $this->qoldiq_summa * (self::PENYA_FOIZI / 100) * $kechikishKunlari;
+        // Rule 2: penalty = overdue_amount * 0.004 * overdue_days
+        $overdueAmount = (float) $this->qoldiq_summa;
+        $penya = $overdueAmount * self::PENYA_RATE * $kechikishKunlari;
 
-        // Maximum 50% dan oshmasligi kerak
-        $maxPenya = $this->qoldiq_summa * (self::MAX_PENYA_FOIZI / 100);
+        // Rule 3: penalty <= overdue_amount * 0.5 (cap at 50%)
+        $maxPenya = $overdueAmount * self::MAX_PENYA_RATE;
         $penya = min($penya, $maxPenya);
 
-        $this->penya_summasi = $penya;
+        $this->penya_summasi = round($penya, 2);
 
         if ($save) {
             $this->save();
         }
 
-        return $penya;
+        return $this->penya_summasi;
     }
 
     /**
-     * To'lovni qo'llash (FIFO - eng eski qarzdan boshlab)
+     * Get penalty details for display in monthly table
+     * Rule 7: MUST always return overdue_days, penalty_rate, calculated_penalty
+     * No NULL or empty values allowed
+     * 
+     * @param Carbon|null $asOfDate
+     * @return array
      */
-    public function applyPayment(float $amount): array
+    public function getPenaltyDetails(?Carbon $asOfDate = null): array
     {
+        $asOfDate = $asOfDate ?? Carbon::today();
+        $oxirgiMuddat = Carbon::parse($this->oxirgi_muddat);
+
+        // Calculate overdue days
+        $overdueDays = 0;
+        if ($asOfDate->gt($oxirgiMuddat) && $this->holat !== 'tolangan') {
+            $overdueDays = $oxirgiMuddat->diffInDays($asOfDate);
+        }
+
+        // Calculate penalty using the formula
+        $overdueAmount = (float) $this->qoldiq_summa;
+        $calculatedPenalty = $overdueAmount * self::PENYA_RATE * $overdueDays;
+        $maxPenalty = $overdueAmount * self::MAX_PENYA_RATE;
+        $penaltyCapApplied = $calculatedPenalty > $maxPenalty;
+        $calculatedPenalty = min($calculatedPenalty, $maxPenalty);
+
+        return [
+            'overdue_days' => $overdueDays,              // integer, 0 allowed
+            'penalty_rate' => self::PENYA_FOIZI,        // always 0.4%
+            'calculated_penalty' => round($calculatedPenalty, 2), // numeric, 0 allowed
+            'penalty_cap_applied' => $penaltyCapApplied,
+            'overdue_amount' => $overdueAmount,
+            'max_penalty' => round($maxPenalty, 2),
+        ];
+    }
+
+    /**
+     * Apply payment to this schedule
+     * 
+     * Payment allocation order (Contract Rule 6):
+     * a) penalty (ONLY if penalty > 0)
+     * b) overdue rent
+     * c) current rent
+     * 
+     * Rule 8: If penalty = 0, skip penalty allocation step entirely
+     * 
+     * @param float $amount Amount to apply
+     * @param Carbon|null $paymentDate Date of payment (for penalty calculation)
+     * @return array Result with penalty_tolangan, asosiy_tolangan, qoldiq
+     */
+    public function applyPayment(float $amount, ?Carbon $paymentDate = null): array
+    {
+        $paymentDate = $paymentDate ?? Carbon::today();
+        
         $result = [
             'penya_tolangan' => 0,
             'asosiy_tolangan' => 0,
-            'qoldiq' => $amount
+            'qoldiq' => $amount,
+            'penalty_details' => null,
         ];
 
-        // Avval penyani to'lash
-        if ($this->qoldiq_penya > 0 && $result['qoldiq'] > 0) {
-            $penyaTolov = min($this->qoldiq_penya, $result['qoldiq']);
+        // Calculate penalty at payment date
+        $this->calculatePenyaAtDate($paymentDate, false);
+        $result['penalty_details'] = $this->getPenaltyDetails($paymentDate);
+
+        // Rule 6a: Pay penalty first (ONLY if penalty > 0 - Rule 8)
+        $qoldiqPenya = $this->penya_summasi - $this->tolangan_penya;
+        if ($qoldiqPenya > 0 && $result['qoldiq'] > 0) {
+            $penyaTolov = min($qoldiqPenya, $result['qoldiq']);
             $this->tolangan_penya += $penyaTolov;
             $result['penya_tolangan'] = $penyaTolov;
             $result['qoldiq'] -= $penyaTolov;
         }
 
-        // Keyin asosiy qarzni to'lash
+        // Rule 6b & 6c: Pay rent (overdue and current)
         if ($this->qoldiq_summa > 0 && $result['qoldiq'] > 0) {
             $asosiyTolov = min($this->qoldiq_summa, $result['qoldiq']);
             $this->tolangan_summa += $asosiyTolov;
@@ -238,7 +298,7 @@ class PaymentSchedule extends Model
             $result['qoldiq'] -= $asosiyTolov;
         }
 
-        // Holatni yangilash
+        // Update status
         $this->updateStatus();
         $this->save();
 

@@ -3,6 +3,10 @@
 @section('header', $contract->shartnoma_raqami)
 @section('subheader', 'Shartnoma tafsilotlari')
 @section('header-actions')
+<a href="{{ route('registry.contracts.penalty-calculator', $contract) }}" class="btn btn-warning" title="Penya kalkulyatori">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+    Penya kalkulyatori
+</a>
 <a href="{{ route('registry.payments.create', ['contract_id' => $contract->id]) }}" class="btn btn-primary">
     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
     To'lov qo'shish

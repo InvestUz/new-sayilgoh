@@ -164,8 +164,9 @@ function formatLotSum($num) {
 
             @if($contract)
             <div class="bg-slate-800/50 backdrop-blur border border-slate-700/50 rounded-xl overflow-hidden">
-                <div class="px-5 py-4 border-b border-slate-700/50 bg-slate-800/80">
+                <div class="px-5 py-4 border-b border-slate-700/50 bg-slate-800/80 flex items-center justify-between">
                     <h3 class="font-semibold text-white">Shartnoma</h3>
+                    <a href="{{ route('registry.contracts.show', $contract) }}" class="text-xs text-blue-400 hover:text-blue-300 font-medium">Batafsil</a>
                 </div>
                 <div class="p-5 space-y-1 text-sm">
                     <div class="flex justify-between py-2"><span class="text-slate-400">Raqam:</span><span class="text-white font-semibold">{{ $contract->shartnoma_raqami }}</span></div>
@@ -173,6 +174,13 @@ function formatLotSum($num) {
                     <div class="flex justify-between py-2"><span class="text-slate-400">Boshlanish:</span><span class="text-slate-200">{{ \Carbon\Carbon::parse($contract->boshlanish_sanasi)->format('d.m.Y') }}</span></div>
                     <div class="flex justify-between py-2"><span class="text-slate-400">Tugash:</span><span class="text-slate-200">{{ \Carbon\Carbon::parse($contract->tugash_sanasi)->format('d.m.Y') }}</span></div>
                     <div class="flex justify-between py-2"><span class="text-slate-400">Oylik:</span><span class="text-white font-bold">{{ number_format($contract->oylik_tolovi, 0, '', ' ') }}</span></div>
+                </div>
+                <!-- Penya kalkulyatori button -->
+                <div class="px-5 py-3 border-t border-slate-700/50">
+                    <a href="{{ route('registry.contracts.penalty-calculator', $contract) }}" class="flex items-center justify-center gap-2 w-full py-2 bg-amber-600 hover:bg-amber-500 text-white text-sm font-medium rounded-lg transition">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                        Penya kalkulyatori
+                    </a>
                 </div>
             </div>
             @else

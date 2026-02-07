@@ -121,7 +121,10 @@ class Payment extends Model
     // ============================================
 
     /**
-     * To'lovni qo'llash - FIFO tartibida eng eski qarzga
+     * Apply payment to contract using PenaltyCalculatorService
+     * This is called automatically by PaymentObserver when payment is approved
+     * 
+     * @deprecated Use PaymentObserver instead - this method kept for manual calls
      */
     public function applyToContract(): void
     {
@@ -129,36 +132,9 @@ class Payment extends Model
             return;
         }
 
-        $contract = $this->contract;
-        $qoldiqSumma = $this->summa;
-
-        // Eng eski to'lanmagan oylardan boshlab to'lash
-        $schedules = $contract->paymentSchedules()
-            ->tolanmagan()
-            ->orderBy('oy_raqami')
-            ->get();
-
-        $totalPenyaTolov = 0;
-        $totalAsosiyTolov = 0;
-
-        foreach ($schedules as $schedule) {
-            if ($qoldiqSumma <= 0) break;
-
-            // Avval penyani hisoblash
-            $schedule->calculatePenya();
-
-            // To'lovni qo'llash
-            $result = $schedule->applyPayment($qoldiqSumma);
-
-            $totalPenyaTolov += $result['penya_tolangan'];
-            $totalAsosiyTolov += $result['asosiy_tolangan'];
-            $qoldiqSumma = $result['qoldiq'];
-        }
-
-        // To'lov taqsimotini saqlash
-        $this->penya_uchun = $totalPenyaTolov;
-        $this->asosiy_qarz_uchun = $totalAsosiyTolov;
-        $this->save();
+        // Let the service handle the payment application
+        $service = app(\App\Services\PenaltyCalculatorService::class);
+        $service->applyPayment($this);
     }
 
     /**

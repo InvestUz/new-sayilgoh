@@ -5,6 +5,7 @@ namespace App\Providers;
 use Illuminate\Support\ServiceProvider;
 use App\Models\Payment;
 use App\Observers\PaymentObserver;
+use App\Services\PenaltyCalculatorService;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -13,7 +14,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // Register PenaltyCalculatorService as singleton
+        $this->app->singleton(PenaltyCalculatorService::class, function ($app) {
+            return new PenaltyCalculatorService();
+        });
     }
 
     /**

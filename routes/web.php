@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\WebController;
+use App\Http\Controllers\PenaltyController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -47,5 +48,10 @@ Route::prefix('registry')->group(function () {
     // Payments CRUD
     Route::get('/payments/create', [WebController::class, 'paymentsCreate'])->name('registry.payments.create');
     Route::post('/payments', [WebController::class, 'paymentsStore'])->name('registry.payments.store');
+
+    // Penalty Calculator & Notifications (Bildirg'inoma)
+    Route::get('/contracts/{contract}/penalty-calculator', [PenaltyController::class, 'calculatorPage'])->name('registry.contracts.penalty-calculator');
+    Route::get('/penalty/notification/{notification}', [PenaltyController::class, 'showNotification'])->name('registry.penalty.notification');
+    Route::get('/penalty/notification/{notification}/download', [PenaltyController::class, 'downloadPdf'])->name('registry.penalty.download');
 });
 

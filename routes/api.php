@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\ContractController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\AnalyticsController;
+use App\Http\Controllers\PenaltyController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -91,3 +92,24 @@ Route::get('/calendar', [CalendarController::class, 'getPayments']);
 // ============================================
 Route::get('/analytics/collection-rate', [AnalyticsController::class, 'getCollectionRate']);
 Route::get('/analytics/monthly-comparison', [AnalyticsController::class, 'getMonthlyComparison']);
+
+// ============================================
+// PENALTY CALCULATOR & NOTIFICATIONS (Bildirg'inoma)
+// ============================================
+Route::prefix('penalty')->group(function () {
+    // Calculator
+    Route::post('/calculate', [PenaltyController::class, 'calculate']);
+    
+    // Notifications
+    Route::post('/notification/generate', [PenaltyController::class, 'generateNotification']);
+    Route::post('/notification/{notification}/pdf', [PenaltyController::class, 'generatePdf']);
+    
+    // Audit
+    Route::get('/mismatches', [PenaltyController::class, 'getMismatches']);
+});
+
+// Schedule penalty details (for calculator auto-fill)
+Route::get('/schedule/{schedule}/penalty-details', [PenaltyController::class, 'scheduleDetails']);
+
+// Contract notifications
+Route::get('/contracts/{contract}/notifications', [PenaltyController::class, 'contractNotifications']);
