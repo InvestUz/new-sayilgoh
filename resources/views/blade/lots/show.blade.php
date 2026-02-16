@@ -477,8 +477,8 @@ function formatLotSum($num) {
                                 <td class="border border-slate-600 px-2 py-1 text-center {{ $kechikish > 0 ? 'text-red-400' : 'text-slate-500' }}">{{ $kechikish > 0 ? $kechikish : '—' }}</td>
                                 <td class="border border-slate-600 px-2 py-1 text-center text-slate-400">{{ $kechikish > 0 ? '0,4%' : '—' }}</td>
                                 <td class="border border-slate-600 px-2 py-1 text-right {{ $penyaHisob > 0 ? 'text-amber-400' : 'text-slate-500' }}">{{ $penyaHisob > 0 ? number_format($penyaHisob, 0, ',', ' ') : '—' }}</td>
-                                <td class="border border-slate-600 px-2 py-1 text-right {{ $tolanganPenya > 0 ? 'text-green-400' : 'text-slate-500' }}">{{ $tolanganPenya > 0 ? number_format($tolanganPenya, 0, ',', ' ') : '—' }}</td>
-                                <td class="border border-slate-600 px-2 py-1 text-right {{ $qoldiqPenya > 0 ? 'text-amber-400' : ($tolanganPenya > 0 ? 'text-green-400' : 'text-slate-500') }}">{{ $qoldiqPenya > 0 ? number_format($qoldiqPenya, 0, ',', ' ') : ($tolanganPenya > 0 ? '✓' : '—') }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-right {{ $tolanganPenya > 0 && $penyaHisob > 0 ? 'text-green-400' : 'text-slate-500' }}">{{ $tolanganPenya > 0 && $penyaHisob > 0 ? number_format($tolanganPenya, 0, ',', ' ') : '—' }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-right {{ $qoldiqPenya > 0 ? 'text-amber-400' : ($tolanganPenya > 0 && $penyaHisob > 0 ? 'text-green-400' : 'text-slate-500') }}">{{ $qoldiqPenya > 0 ? number_format($qoldiqPenya, 0, ',', ' ') : ($tolanganPenya > 0 && $penyaHisob > 0 ? '✓' : '—') }}</td>
                                 <td class="border border-slate-600 px-1 py-1 text-center">
                                     <template x-if="!editing">
                                         <div class="flex items-center justify-center gap-1">
