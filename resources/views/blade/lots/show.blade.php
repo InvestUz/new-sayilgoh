@@ -410,17 +410,15 @@ function formatLotSum($num) {
                                 $muddatDate = \Carbon\Carbon::parse($schedule->oxirgi_muddat);
                                 $tolanganPenya = $schedule->tolangan_penya ?? 0;
 
-                                // Find the actual payment date for this schedule
+                                // Find the actual payment date for this schedule from payments table
                                 $lastPaymentDate = null;
-                                $schedulePayments = $contract->payments
-                                    ->where('created_at', '>=', $muddatDate)
-                                    ->sortBy('tolov_sanasi');
 
                                 // Check if this schedule has been paid (partially or fully)
                                 if ($schedule->tolangan_summa > 0) {
-                                    // Find payment that likely paid this schedule
+                                    // Find payments that could have paid this schedule
                                     foreach ($contract->payments->sortBy('tolov_sanasi') as $pmt) {
                                         $pmtDate = \Carbon\Carbon::parse($pmt->tolov_sanasi);
+                                        // Payment should be after the schedule start but relevant to this month
                                         if ($pmtDate->gte($muddatDate->copy()->subDays(30))) {
                                             $lastPaymentDate = $pmtDate;
                                             break;
@@ -428,26 +426,28 @@ function formatLotSum($num) {
                                     }
                                 }
 
-                                // Calculate days overdue (penalty starts from day AFTER deadline)
-                                $kechikish = 0;
-                                $penyaBase = 0; // Amount used for penalty calculation
-                                $penyaStartDate = $muddatDate->copy()->addDay(); // Penalty starts from day 11 (after deadline)
+                                // Use stored penalty data from database (calculated at payment time)
+                                $kechikish = $schedule->kechikish_kunlari ?? 0;
+                                $penyaHisob = $schedule->penya_summasi ?? 0;
 
-                                if ($schedule->tolangan_summa > 0 && $lastPaymentDate && $lastPaymentDate->gt($muddatDate)) {
-                                    // If paid late, calculate days from (deadline+1) to payment date
-                                    $kechikish = max(0, $penyaStartDate->diffInDays($lastPaymentDate, false));
-                                    $penyaBase = $schedule->tolov_summasi; // Original amount for penalty at payment time
-                                } elseif ($schedule->qoldiq_summa > 0 && $bugun->gt($muddatDate)) {
-                                    // If still has debt and overdue, calculate from (deadline+1) to today
-                                    $kechikish = max(0, $penyaStartDate->diffInDays($bugun, false));
-                                    $penyaBase = $schedule->qoldiq_summa; // Remaining debt for ongoing penalty
+                                // If schedule still has debt and is overdue, recalculate penalty to today
+                                if ($schedule->qoldiq_summa > 0 && $bugun->gt($muddatDate)) {
+                                    // Days from deadline to today
+                                    $kechikish = $muddatDate->diffInDays($bugun);
+
+                                    // Penalty = remaining debt × 0.4% × days (max 50%)
+                                    $penyaRate = 0.004;
+                                    $rawPenya = $schedule->qoldiq_summa * $penyaRate * $kechikish;
+                                    $maxPenya = $schedule->qoldiq_summa * 0.5;
+                                    $penyaHisob = min($rawPenya, $maxPenya);
+                                } elseif ($schedule->tolangan_summa > 0 && $tolanganPenya > 0) {
+                                    // If penalty was paid, show the historical data
+                                    // kechikish and penyaHisob are already set from database
+                                    // But recalculate kechikish if we have actual payment date
+                                    if ($lastPaymentDate && $lastPaymentDate->gt($muddatDate)) {
+                                        $kechikish = $muddatDate->diffInDays($lastPaymentDate);
+                                    }
                                 }
-
-                                // Penya calculation: debt × 0.4% × days (0.4% = 0.004)
-                                $penyaRate = 0.004; // 0.4% per day
-                                $rawPenya = $penyaBase * $penyaRate * $kechikish;
-                                $maxPenya = $penyaBase * 0.5; // 50% cap
-                                $penyaHisob = min($rawPenya, $maxPenya);
 
                                 $qoldiqPenya = max(0, $penyaHisob - $tolanganPenya);
 

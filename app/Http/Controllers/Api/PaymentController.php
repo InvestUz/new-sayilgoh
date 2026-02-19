@@ -627,4 +627,88 @@ class PaymentController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Penya (jarima) uchun alohida to'lov qabul qilish
+     *
+     * Bu endpoint faqat penya uchun alohida to'lov qabul qiladi
+     */
+    public function storePenaltyPayment(Request $request): JsonResponse
+    {
+        try {
+            $validated = $request->validate([
+                'contract_id' => 'required|exists:contracts,id',
+                'payment_schedule_id' => 'required|exists:payment_schedules,id',
+                'summa' => 'required|numeric|min:1',
+                'tolov_sanasi' => 'required|date',
+                'tolov_usuli' => 'sometimes|in:bank_otkazmasi,naqd,karta,onlayn',
+            ]);
+
+            $validated['tolov_usuli'] = $validated['tolov_usuli'] ?? 'bank_otkazmasi';
+            $contract = Contract::findOrFail($validated['contract_id']);
+            $schedule = PaymentSchedule::findOrFail($validated['payment_schedule_id']);
+
+            // Tekshirish
+            if ($schedule->contract_id !== $contract->id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Noto\'g\'ri grafik'
+                ], 422);
+            }
+
+            $qoldiqPenya = $schedule->penya_summasi - $schedule->tolangan_penya;
+            if ($qoldiqPenya <= 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Bu oy uchun penya yo\'q yoki to\'lagan'
+                ], 422);
+            }
+
+            if ($validated['summa'] > $qoldiqPenya) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Summa juda katta. Qoldiq: ' . number_format($qoldiqPenya, 0)
+                ], 422);
+            }
+
+            DB::beginTransaction();
+
+            // To'lov raqamini generatsiya qilish
+            $tolovRaqami = Payment::generateTolovRaqami();
+
+            // To'lovni yaratish (faqat penya uchun)
+            $payment = Payment::create([
+                'contract_id' => $contract->id,
+                'payment_schedule_id' => $schedule->id,
+                'tolov_raqami' => $tolovRaqami,
+                'tolov_sanasi' => $validated['tolov_sanasi'],
+                'summa' => $validated['summa'],
+                'penya_uchun' => $validated['summa'],
+                'asosiy_qarz_uchun' => 0,
+                'avans' => 0,
+                'tolov_usuli' => $validated['tolov_usuli'],
+                'holat' => 'tasdiqlangan',
+                'tasdiqlangan_sana' => now(),
+            ]);
+
+            // Grafikni yangilash
+            $schedule->tolangan_penya += $validated['summa'];
+            $schedule->updateStatus();
+            $schedule->save();
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Penya to\'lovi saqlandi',
+                'data' => $payment
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Xatolik: ' . $e->getMessage()
+            ], 500);
+        }
+    }
 }

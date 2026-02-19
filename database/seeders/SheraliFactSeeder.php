@@ -12,17 +12,17 @@ use App\Models\Payment;
 use Carbon\Carbon;
 
 /**
- * SheraliFactSeeder - Production-grade seeder for sherali_fact.csv
+ * SheraliFactSeeder - Production-grade seeder for sayilgoh_fakt_cv.csv
  *
  * CSV Format (semicolon separated):
  * [0] Date/time: "27.03.2024 9:31"
  * [1] Account info: "20210000300792302016/305004780/..."
  * [2] Document number: "7084837"
  * [3] Code 1: "4"
- * [4] Code 2: "00401" or "00083" etc.
- * [5] Empty
- * [6] Amount: "16 855 693,80" (space as thousand separator, comma as decimal)
- * [7] Purpose: Contains lot number L{digits}L, INN/PINFL, tenant name
+ * [4] Code 2: "00401"
+ * [5] Amount: "16 855 693,80" (space as thousand separator, comma as decimal)
+ * [6] Purpose: payment description
+ * [7] Lot/Contract reference: "8408626" or "21/21" - KEY COLUMN FOR MATCHING
  */
 class SheraliFactSeeder extends Seeder
 {
@@ -32,19 +32,18 @@ class SheraliFactSeeder extends Seeder
     private array $duplicates = [];
 
     private array $lotCache = [];
-    private array $innCache = [];
-    private array $tenantCache = [];
+    private array $contractCache = [];
     private array $processedPayments = [];
 
     public function run(): void
     {
         $this->command->info('');
         $this->command->info('╔════════════════════════════════════════════════════════════════════════════╗');
-        $this->command->info('║           SHERALI FACT CSV IMPORT - Production Mode                        ║');
+        $this->command->info('║           SAYILGOH FAKT CSV IMPORT - Production Mode                       ║');
         $this->command->info('╚════════════════════════════════════════════════════════════════════════════╝');
         $this->command->info('');
 
-        $csvPath = public_path('dataset/sherali_fact.csv');
+        $csvPath = public_path('dataset/sayilgoh_fakt_cv.csv');
 
         if (!file_exists($csvPath)) {
             $this->command->error("CSV file not found: {$csvPath}");
@@ -52,8 +51,8 @@ class SheraliFactSeeder extends Seeder
         }
 
         // Clear existing imported payments from this source
-        $this->command->info('Clearing previous sherali_fact imports...');
-        $deleted = Payment::where('izoh', 'LIKE', '%sherali_fact.csv%')->delete();
+        $this->command->info('Clearing previous imports...');
+        $deleted = Payment::where('izoh', 'LIKE', '%sayilgoh_fakt_cv%')->delete();
         $this->command->info("Deleted {$deleted} previous imports");
         $this->command->info('');
 
@@ -92,37 +91,27 @@ class SheraliFactSeeder extends Seeder
             $this->lotCache[strtoupper($lot->lot_raqami)] = $lot;
         }
 
-        // Cache tenants by INN with multiple formats
-        $tenants = Tenant::with(['contracts' => function ($q) {
-            $q->where('holat', 'faol');
-        }])->get();
+        // Cache contracts by shartnoma_raqami
+        $contracts = Contract::where('holat', 'faol')
+            ->with(['lot', 'tenant'])
+            ->get();
 
-        foreach ($tenants as $tenant) {
-            if (empty($tenant->inn)) continue;
+        foreach ($contracts as $contract) {
+            if (empty($contract->shartnoma_raqami)) continue;
 
-            $cleanInn = preg_replace('/[^0-9]/', '', $tenant->inn);
-            if (empty($cleanInn)) continue;
+            $this->contractCache[$contract->shartnoma_raqami] = $contract;
 
-            $this->innCache[$cleanInn] = $tenant;
-
-            // PINFL (14 digits) - also cache by last 9 digits
-            if (strlen($cleanInn) == 14) {
-                $last9 = substr($cleanInn, -9);
-                if (!isset($this->innCache[$last9])) {
-                    $this->innCache[$last9] = $tenant;
-                }
-            }
-
-            // Cache by normalized name
-            $normalizedName = $this->normalizeName($tenant->name);
-            if ($normalizedName && !isset($this->tenantCache[$normalizedName])) {
-                $this->tenantCache[$normalizedName] = $tenant;
+            // Extract numeric part (SH-21 -> 21)
+            if (preg_match('/(\d+)/', $contract->shartnoma_raqami, $matches)) {
+                $num = $matches[1];
+                $this->contractCache[$num . '/' . $num] = $contract;
+                $this->contractCache[$num] = $contract;
+                $this->contractCache['SH-' . $num] = $contract;
             }
         }
 
         $this->command->info("  Lots cached: " . count($lots));
-        $this->command->info("  Tenants cached: " . count($tenants));
-        $this->command->info("  INN entries: " . count($this->innCache));
+        $this->command->info("  Contracts cached: " . count($contracts));
         $this->command->info('');
     }
 
@@ -168,12 +157,13 @@ class SheraliFactSeeder extends Seeder
 
     private function processRow(array $row, int $rowNumber): void
     {
-        // Parse row data based on sherali_fact.csv format
+        // Parse row data based on sayilgoh_fakt_cv.csv format
         $dateStr = trim($row[0] ?? '');
         $accountInfo = trim($row[1] ?? '');
         $docNumber = trim($row[2] ?? '');
-        $amountStr = trim($row[6] ?? '');
-        $purpose = trim($row[7] ?? '');
+        $amountStr = trim($row[5] ?? '');  // Column 5 = Amount
+        $purpose = trim($row[6] ?? '');    // Column 6 = Purpose
+        $lotRef = trim($row[7] ?? '');     // Column 7 = Lot/Contract reference (KEY!)
 
         // Parse amount
         $amount = $this->parseAmount($amountStr);
@@ -197,18 +187,14 @@ class SheraliFactSeeder extends Seeder
             return;
         }
 
-        // Check for rental/auction payment
-        if (!$this->isRentalPayment($purpose, $accountInfo)) {
+        // Skip non-rental transactions (budget returns, refunds)
+        if ($this->shouldSkip($purpose, $accountInfo)) {
             $this->skipped[] = [
                 'row' => $rowNumber,
-                'reason' => 'Not a rental payment',
-                'purpose' => mb_substr($purpose, 0, 60),
+                'reason' => 'Non-rental/Budget return',
             ];
             return;
         }
-
-        // Extract payment info
-        $extracted = $this->extractPaymentInfo($purpose, $accountInfo);
 
         // Generate unique key for duplicate detection
         $uniqueKey = $date->format('Y-m-d') . '_' . $docNumber . '_' . $amount;
@@ -222,16 +208,16 @@ class SheraliFactSeeder extends Seeder
         }
         $this->processedPayments[$uniqueKey] = true;
 
-        // Find matching contract
-        $contract = $this->findContract($extracted);
+        // Find matching contract using LAST COLUMN (lotRef)
+        $contract = $this->findContract($lotRef, $purpose);
+        $matchedBy = 'lot_ref';
 
         if (!$contract) {
             $this->unmatched[] = [
                 'row' => $rowNumber,
                 'date' => $date->format('d.m.Y'),
-                'lot_number' => $extracted['lot_number'] ?? '-',
-                'inn' => $extracted['inn'] ?? '-',
-                'tenant_name' => $extracted['tenant_name'] ?? '-',
+                'lot_number' => $lotRef,
+                'tenant_name' => '-',
                 'amount' => $amount,
                 'purpose' => mb_substr($purpose, 0, 80),
             ];
@@ -239,172 +225,92 @@ class SheraliFactSeeder extends Seeder
         }
 
         // Create payment
-        $this->createPayment($contract, $date, $amount, $docNumber, $purpose, $extracted, $rowNumber);
+        $this->createPayment($contract, $date, $amount, $docNumber, $purpose, $lotRef, $matchedBy, $rowNumber);
 
         $this->matched[] = [
             'row' => $rowNumber,
             'date' => $date->format('d.m.Y'),
-            'lot_number' => $contract->lot->lot_raqami ?? $extracted['lot_number'],
+            'lot_number' => $contract->lot->lot_raqami ?? $lotRef,
             'tenant_name' => $contract->tenant->name ?? '-',
             'amount' => $amount,
-            'match_by' => $extracted['matched_by'] ?? 'unknown',
+            'match_by' => $matchedBy,
         ];
     }
 
-    private function isRentalPayment(string $purpose, string $accountInfo): bool
+    private function shouldSkip(string $purpose, string $accountInfo): bool
     {
-        $keywords = [
-            'lotdan',
-            'G`oliblikdan',
-            'Buyurtmachi',
-            'SAYILGOH',
-            'auksion',
-            'ijara',
-            'аренд',
-            'Аренд',
+        $skipPatterns = [
+            'Возвратить по предприятию',
+            'BUDJET',
+            'Ягона газна хисобвараги',
+            'НОТЎҒРИ УТКАЗИЛГАН',
+            'QAYTARILDI',
         ];
 
-        foreach ($keywords as $keyword) {
-            if (mb_stripos($purpose, $keyword) !== false) {
-                return true;
-            }
+        foreach ($skipPatterns as $pattern) {
+            if (mb_stripos($purpose, $pattern) !== false) return true;
+            if (mb_stripos($accountInfo, $pattern) !== false) return true;
         }
-
-        // Check for lot number pattern
-        if (preg_match('/L\d{5,}L/i', $purpose)) {
-            return true;
-        }
-
-        // Check account info for rental indicators
-        if (preg_match('/SAYILGOH/i', $accountInfo)) {
-            return true;
-        }
-
         return false;
     }
 
-    private function extractPaymentInfo(string $purpose, string $accountInfo): array
+    private function findContract(string $lotRef, string $purpose): ?Contract
     {
-        $result = [
-            'lot_number' => null,
-            'inn' => null,
-            'tenant_name' => null,
-            'matched_by' => null,
-        ];
-
-        // Extract lot number (L{digits}L pattern)
-        if (preg_match('/L(\d{6,10})L/i', $purpose, $matches)) {
-            $result['lot_number'] = $matches[1];
+        if (empty($lotRef)) {
+            return null;
         }
 
-        // Extract INN/PINFL from purpose
-        if (preg_match('/(?:INN\s*[-:]?\s*PINFL|PINFL|INN)\s*[:=]?\s*(\d{9,14})/i', $purpose, $matches)) {
-            $result['inn'] = $matches[1];
-        }
+        // Handle multiple refs (e.g., "12072339, 12072343")
+        $refs = preg_split('/[,\s]+/', $lotRef);
+        $primaryRef = trim($refs[0]);
 
-        // Extract INN from account info (format: account/INN/name)
-        if (empty($result['inn']) && preg_match('/\/(\d{9})\//', $accountInfo, $matches)) {
-            $result['inn'] = $matches[1];
-        }
-
-        // Extract tenant name
-        if (preg_match('/G`olib\s*[:=]?\s*"?([^"]+)"?\s*(?:MCHJ|MChJ|DUK|XK|QK|xususiy|YaTT|,|Buyurtmachi|$)/ui', $purpose, $matches)) {
-            $result['tenant_name'] = trim($matches[1], ' "\'');
-        }
-
-        return $result;
-    }
-
-    private function findContract(array &$extracted): ?Contract
-    {
-        // Method 1: By lot number (most reliable)
-        if (!empty($extracted['lot_number'])) {
-            $lotNum = $extracted['lot_number'];
-
-            if (isset($this->lotCache[$lotNum])) {
-                $lot = $this->lotCache[$lotNum];
-                if ($lot->contracts->isNotEmpty()) {
-                    $extracted['matched_by'] = 'lot_number';
-                    return $lot->contracts->first();
-                }
+        // Method 1: Contract format "21/21"
+        if (preg_match('/^(\d+)\/\d+$/', $primaryRef, $matches)) {
+            $num = $matches[1];
+            if (isset($this->contractCache[$primaryRef])) {
+                return $this->contractCache[$primaryRef];
             }
-
-            // Try with L prefix/suffix
-            $fullLot = 'L' . $lotNum . 'L';
-            if (isset($this->lotCache[$fullLot])) {
-                $lot = $this->lotCache[$fullLot];
-                if ($lot->contracts->isNotEmpty()) {
-                    $extracted['matched_by'] = 'lot_number_full';
-                    return $lot->contracts->first();
-                }
+            if (isset($this->contractCache['SH-' . $num])) {
+                return $this->contractCache['SH-' . $num];
             }
+        }
 
-            // Database LIKE search
-            $lot = Lot::where('lot_raqami', 'LIKE', '%' . $lotNum . '%')
-                ->with(['contracts' => fn($q) => $q->where('holat', 'faol')->with('tenant')])
-                ->first();
-
-            if ($lot && $lot->contracts->isNotEmpty()) {
-                $extracted['matched_by'] = 'lot_number_like';
+        // Method 2: Lot number (numeric)
+        $numericRef = preg_replace('/[^0-9]/', '', $primaryRef);
+        if ($numericRef && isset($this->lotCache[$numericRef])) {
+            $lot = $this->lotCache[$numericRef];
+            if ($lot->contracts->isNotEmpty()) {
                 return $lot->contracts->first();
             }
         }
 
-        // Method 2: By INN
-        if (!empty($extracted['inn'])) {
-            $inn = $extracted['inn'];
-
-            if (isset($this->innCache[$inn])) {
-                $tenant = $this->innCache[$inn];
-                if ($tenant->contracts->isNotEmpty()) {
-                    $extracted['matched_by'] = 'inn';
-                    return $tenant->contracts->first();
-                }
-            }
-
-            // Try last 9 digits for PINFL
-            if (strlen($inn) > 9) {
-                $last9 = substr($inn, -9);
-                if (isset($this->innCache[$last9])) {
-                    $tenant = $this->innCache[$last9];
-                    if ($tenant->contracts->isNotEmpty()) {
-                        $extracted['matched_by'] = 'inn_partial';
-                        return $tenant->contracts->first();
-                    }
-                }
-            }
-
-            // Database LIKE search
-            $tenant = Tenant::where('inn', 'LIKE', '%' . $inn . '%')
-                ->with(['contracts' => fn($q) => $q->where('holat', 'faol')])
+        // Method 3: Database search for lot
+        if ($numericRef) {
+            $lot = Lot::where('lot_raqami', 'LIKE', '%' . $numericRef . '%')
+                ->with(['contracts' => fn($q) => $q->where('holat', 'faol')->with('tenant')])
                 ->first();
 
-            if ($tenant && $tenant->contracts->isNotEmpty()) {
-                $extracted['matched_by'] = 'inn_like';
-                return $tenant->contracts->first();
+            if ($lot && $lot->contracts->isNotEmpty()) {
+                return $lot->contracts->first();
             }
         }
 
-        // Method 3: By tenant name
-        if (!empty($extracted['tenant_name'])) {
-            $normalizedName = $this->normalizeName($extracted['tenant_name']);
-
-            if (isset($this->tenantCache[$normalizedName])) {
-                $tenant = $this->tenantCache[$normalizedName];
-                if ($tenant->contracts->isNotEmpty()) {
-                    $extracted['matched_by'] = 'tenant_name';
-                    return $tenant->contracts->first();
+        // Method 4: Extract from purpose L{digits}L
+        if (preg_match('/L(\d{6,10})L/i', $purpose, $matches)) {
+            $lotNum = $matches[1];
+            if (isset($this->lotCache[$lotNum])) {
+                $lot = $this->lotCache[$lotNum];
+                if ($lot->contracts->isNotEmpty()) {
+                    return $lot->contracts->first();
                 }
             }
+        }
 
-            // Database LIKE search
-            $tenant = Tenant::where('name', 'LIKE', '%' . $extracted['tenant_name'] . '%')
-                ->with(['contracts' => fn($q) => $q->where('holat', 'faol')])
-                ->first();
-
-            if ($tenant && $tenant->contracts->isNotEmpty()) {
-                $extracted['matched_by'] = 'tenant_name_like';
-                return $tenant->contracts->first();
+        // Method 5: Format "10.окт" etc.
+        if (preg_match('/^(\d+)\./', $primaryRef, $matches)) {
+            $num = $matches[1];
+            if (isset($this->contractCache['SH-' . $num])) {
+                return $this->contractCache['SH-' . $num];
             }
         }
 
@@ -417,7 +323,8 @@ class SheraliFactSeeder extends Seeder
         float $amount,
         string $docNumber,
         string $purpose,
-        array $extracted,
+        string $lotRef,
+        string $matchedBy,
         int $rowNumber
     ): void {
         try {
@@ -432,16 +339,13 @@ class SheraliFactSeeder extends Seeder
                 'penya_uchun' => 0,
                 'auksion_uchun' => 0,
                 'avans' => 0,
-                'tolov_usuli' => 'bank_otkazmasi',
+                'tolov_usuli' => $this->getPaymentMethod($purpose),
                 'hujjat_raqami' => $docNumber,
                 'holat' => 'tasdiqlangan',
-                'izoh' => 'Imported from sherali_fact.csv. ' .
-                          'Row: ' . $rowNumber . '. ' .
-                          'Matched by: ' . ($extracted['matched_by'] ?? 'N/A') . '. ' .
-                          mb_substr($purpose, 0, 150),
+                'izoh' => 'sayilgoh_fakt_cv Row:' . $rowNumber . ' Ref:' . $lotRef,
             ]);
 
-            // Apply payment to schedules (FIFO)
+            // Apply payment to schedules (FIFO with penalty priority)
             $payment->applyToContract();
 
             DB::commit();
@@ -458,6 +362,20 @@ class SheraliFactSeeder extends Seeder
                 'reason' => 'DB Error: ' . $e->getMessage(),
             ];
         }
+    }
+
+    private function getPaymentMethod(string $purpose): string
+    {
+        if (mb_stripos($purpose, 'нақд') !== false || mb_stripos($purpose, 'накд') !== false) {
+            return 'naqd';
+        }
+        if (mb_stripos($purpose, 'terminal') !== false) {
+            return 'karta';
+        }
+        if (mb_stripos($purpose, 'PAYME') !== false || mb_stripos($purpose, 'Joyda') !== false) {
+            return 'onlayn';
+        }
+        return 'bank_otkazmasi';
     }
 
     private function parseAmount(string $value): float
@@ -505,15 +423,6 @@ class SheraliFactSeeder extends Seeder
         }
     }
 
-    private function normalizeName(?string $name): string
-    {
-        if (empty($name)) return '';
-        $name = mb_strtolower($name);
-        $name = preg_replace('/["\'\-\.\,\(\)]+/', '', $name);
-        $name = preg_replace('/\s+/', '', $name);
-        return $name;
-    }
-
     private function displaySummary(): void
     {
         $this->command->info('');
@@ -527,18 +436,6 @@ class SheraliFactSeeder extends Seeder
         $matchedSum = array_sum(array_column($this->matched, 'amount'));
         $this->command->info("✓ MATCHED PAYMENTS: {$matchedCount}");
         $this->command->info("  Total amount: " . number_format($matchedSum, 2) . " UZS");
-
-        if ($matchedCount > 0) {
-            // Group by match method
-            $byMethod = [];
-            foreach ($this->matched as $m) {
-                $method = $m['match_by'] ?? 'unknown';
-                $byMethod[$method] = ($byMethod[$method] ?? 0) + 1;
-            }
-            foreach ($byMethod as $method => $count) {
-                $this->command->info("    - {$method}: {$count}");
-            }
-        }
         $this->command->info('');
 
         // Unmatched
@@ -549,23 +446,16 @@ class SheraliFactSeeder extends Seeder
 
         if ($unmatchedCount > 0 && $unmatchedCount <= 30) {
             $this->command->info('');
-            $this->command->info(sprintf('  %-6s %-12s %-14s %-30s %15s',
-                'Row', 'Date', 'Lot', 'Tenant', 'Amount'));
-            $this->command->info('  ' . str_repeat('-', 80));
             foreach ($this->unmatched as $u) {
-                $this->command->warn(sprintf('  %-6d %-12s %-14s %-30s %15s',
-                    $u['row'],
-                    $u['date'],
-                    mb_substr($u['lot_number'], 0, 14),
-                    mb_substr($u['tenant_name'], 0, 30),
-                    number_format($u['amount'], 2)
+                $this->command->warn(sprintf('  Row %d: %s | %s',
+                    $u['row'], $u['lot_number'], number_format($u['amount'], 2)
                 ));
             }
         } elseif ($unmatchedCount > 30) {
             $this->command->warn("  (Showing first 30 of {$unmatchedCount})");
             foreach (array_slice($this->unmatched, 0, 30) as $u) {
-                $this->command->warn(sprintf('  Row %d: %s | %s | %s',
-                    $u['row'], $u['lot_number'], $u['tenant_name'], number_format($u['amount'], 2)
+                $this->command->warn(sprintf('  Row %d: %s | %s',
+                    $u['row'], $u['lot_number'], number_format($u['amount'], 2)
                 ));
             }
         }

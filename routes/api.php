@@ -60,6 +60,7 @@ Route::prefix('contracts')->group(function () {
 Route::prefix('payments')->group(function () {
     Route::get('/', [PaymentController::class, 'index']);
     Route::post('/', [PaymentController::class, 'store']);
+    Route::post('/penalty', [PaymentController::class, 'storePenaltyPayment']);
     Route::get('/today', [PaymentController::class, 'today']);
     Route::get('/{payment}', [PaymentController::class, 'show']);
     Route::post('/{payment}/cancel', [PaymentController::class, 'cancel']);
@@ -76,6 +77,11 @@ Route::prefix('payment-schedules')->group(function () {
     Route::post('/contract/{contract}/bulk', [PaymentController::class, 'bulkAddSchedule']);
     Route::post('/contract/{contract}/regenerate', [PaymentController::class, 'regenerateSchedules']);
 });
+
+// ============================================
+// PENYA (PENALTY) PAYMENTS
+// ============================================
+Route::post('/penalty-payments', [PaymentController::class, 'storePenaltyPayment']);
 
 // Auth route (original)
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
@@ -99,11 +105,11 @@ Route::get('/analytics/monthly-comparison', [AnalyticsController::class, 'getMon
 Route::prefix('penalty')->group(function () {
     // Calculator
     Route::post('/calculate', [PenaltyController::class, 'calculate']);
-    
+
     // Notifications
     Route::post('/notification/generate', [PenaltyController::class, 'generateNotification']);
     Route::post('/notification/{notification}/pdf', [PenaltyController::class, 'generatePdf']);
-    
+
     // Audit
     Route::get('/mismatches', [PenaltyController::class, 'getMismatches']);
 });

@@ -27,12 +27,16 @@ class ContractPageController extends Controller
         // Reload to get updated penalty values
         $contract->load('paymentSchedules');
 
-        // Calculate statistics
+        // Calculate statistics with dynamic penalty calculation
+        $totalPenya = $contract->paymentSchedules->sum(function($schedule) {
+            return $schedule->getPenaltyDetails()['calculated_penalty'];
+        });
+
         $stats = [
             'jami_summa' => $contract->shartnoma_summasi,
             'tolangan' => $contract->paymentSchedules->sum('tolangan_summa'),
             'qoldiq' => $contract->paymentSchedules->sum('qoldiq_summa'),
-            'penya' => $contract->paymentSchedules->sum('penya_summasi') - $contract->paymentSchedules->sum('tolangan_penya'),
+            'penya' => $totalPenya,
         ];
 
         return view('contracts.show', compact('contract', 'stats'));
