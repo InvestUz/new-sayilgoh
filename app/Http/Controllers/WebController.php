@@ -818,14 +818,27 @@ class WebController extends Controller
             $contract->load('paymentSchedules');
         }
 
-        // Calculate statistics
+        // Calculate statistics from REAL payments (not calculated schedules)
         $stats = null;
         if ($contract) {
+            // Get only approved payments (not refunds)
+            $approvedPayments = $contract->payments->where('holat', 'tasdiqlangan');
+            $realPaid = $approvedPayments->sum('summa');
+
+            // Get refunds
+            $refunds = $contract->payments->where('holat', 'qaytarilgan');
+            $refundSum = abs($refunds->sum('summa'));
+
+            // Net paid = real payments - refunds
+            $netPaid = $realPaid - $refundSum;
+
             $stats = [
                 'jami_summa' => $contract->shartnoma_summasi,
-                'tolangan' => $contract->paymentSchedules->sum('tolangan_summa'),
-                'qoldiq' => $contract->paymentSchedules->sum('qoldiq_summa'),
+                'tolangan' => $netPaid, // Real payments minus refunds
+                'qoldiq' => max(0, $contract->shartnoma_summasi - $netPaid),
                 'penya' => $contract->paymentSchedules->sum('penya_summasi') - $contract->paymentSchedules->sum('tolangan_penya'),
+                'real_payments' => $realPaid,
+                'refunds' => $refundSum,
             ];
         }
 

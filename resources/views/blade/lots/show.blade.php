@@ -272,8 +272,13 @@ function formatLotSum($num) {
 
         // Grand totals
         $grandTotal = $allSchedules->sum('tolov_summasi');
-        $grandPaid = $allSchedules->sum('tolangan_summa');
-        $grandDebt = $allSchedules->sum('qoldiq_summa');
+
+        // Use REAL payments instead of schedules for grandPaid
+        $approvedPayments = $contract->payments->where('holat', 'tasdiqlangan');
+        $refundPayments = $contract->payments->where('holat', 'qaytarilgan');
+        $grandPaid = $approvedPayments->sum('summa') - abs($refundPayments->sum('summa')); // Real paid minus refunds
+
+        $grandDebt = max(0, $grandTotal - $grandPaid);
         $grandPenya = max(0, $allSchedules->sum('penya_summasi') - $allSchedules->sum('tolangan_penya'));
         $grandOverdue = $allSchedules->filter(fn($s) => $s->qoldiq_summa > 0 && \Carbon\Carbon::parse($s->oxirgi_muddat)->lt($bugun))->sum('qoldiq_summa');
         $grandPercent = $grandTotal > 0 ? round(($grandPaid / $grandTotal) * 100, 1) : 0;
@@ -506,52 +511,110 @@ function formatLotSum($num) {
         @endif
     </div>
 
-    <!-- Recent Payments -->
+    <!-- Recent Payments (только tasdiqlangan) -->
+    @php
+        $approvedPayments = $contract->payments->where('holat', 'tasdiqlangan');
+        $refundPayments = $contract->payments->where('holat', 'qaytarilgan');
+    @endphp
     <div class="bg-slate-800/50 backdrop-blur border border-slate-700/50 rounded-xl overflow-hidden">
         <div class="px-4 py-2 border-b border-slate-700/50 flex items-center justify-between bg-slate-800/80">
             <h3 class="font-bold text-white text-sm">To'lovlar tarixi</h3>
-            <span class="text-xs text-emerald-400">{{ $contract->payments->count() }} ta</span>
+            <span class="text-xs text-emerald-400">{{ $approvedPayments->count() }} ta</span>
         </div>
 
-        @if($contract->payments->count() > 0)
+        @if($approvedPayments->count() > 0)
         <div class="overflow-x-auto">
             <table class="w-full text-xs">
                 <thead class="bg-slate-700/50 text-slate-300">
                     <tr>
-                        <th class="border border-slate-600 px-2 py-1 text-left">Sana</th>
-                        <th class="border border-slate-600 px-2 py-1 text-right">Summa</th>
-                        <th class="border border-slate-600 px-2 py-1 text-right">Qarz uchun</th>
-                        <th class="border border-slate-600 px-2 py-1 text-right">Penya</th>
-                        <th class="border border-slate-600 px-2 py-1 text-right">Avans</th>
-                        <th class="border border-slate-600 px-2 py-1 text-center">Turi</th>
+                        <th class="border border-slate-600 px-3 py-1.5 text-left">Sana</th>
+                        <th class="border border-slate-600 px-3 py-1.5 text-right">Summa</th>
+                        <th class="border border-slate-600 px-3 py-1.5 text-center">Turi</th>
                     </tr>
                 </thead>
                 <tbody class="text-slate-200">
-                    @foreach($contract->payments->sortByDesc('tolov_sanasi')->take(15) as $payment)
+                    @foreach($approvedPayments->sortByDesc('tolov_sanasi')->take(20) as $payment)
                     @php $paymentDate = \Carbon\Carbon::parse($payment->tolov_sanasi); @endphp
                     <tr class="hover:bg-slate-700/30">
-                        <td class="border border-slate-600 px-2 py-1 text-white">{{ $paymentDate->format('d.m.Y') }}</td>
-                        <td class="border border-slate-600 px-2 py-1 text-right text-emerald-400 font-bold">+{{ number_format($payment->summa, 0, '', ' ') }}</td>
-                        <td class="border border-slate-600 px-2 py-1 text-right {{ $payment->asosiy_qarz_uchun > 0 ? 'text-blue-400' : 'text-slate-500' }}">{{ $payment->asosiy_qarz_uchun > 0 ? number_format($payment->asosiy_qarz_uchun, 0, '', ' ') : '—' }}</td>
-                        <td class="border border-slate-600 px-2 py-1 text-right {{ $payment->penya_uchun > 0 ? 'text-amber-400' : 'text-slate-500' }}">{{ $payment->penya_uchun > 0 ? number_format($payment->penya_uchun, 0, '', ' ') : '—' }}</td>
-                        <td class="border border-slate-600 px-2 py-1 text-right {{ $payment->avans > 0 ? 'text-purple-400' : 'text-slate-500' }}">{{ $payment->avans > 0 ? number_format($payment->avans, 0, '', ' ') : '—' }}</td>
-                        <td class="border border-slate-600 px-2 py-1 text-center text-slate-400">{{ ['naqd' => 'Naqd', 'plastik' => 'Karta', 'bank' => 'Bank'][$payment->tolov_turi] ?? 'Naqd' }}</td>
+                        <td class="border border-slate-600 px-3 py-1.5 text-white font-medium">{{ $paymentDate->format('d.m.Y') }}</td>
+                        <td class="border border-slate-600 px-3 py-1.5 text-right text-emerald-400 font-bold">+{{ number_format($payment->summa, 0, '', ' ') }}</td>
+                        <td class="border border-slate-600 px-3 py-1.5 text-center text-slate-400">{{ ['naqd' => 'Naqd', 'plastik' => 'Karta', 'bank' => 'Bank', 'bank_otkazmasi' => 'Bank', 'onlayn' => 'Onlayn'][$payment->tolov_usuli] ?? 'Bank' }}</td>
                     </tr>
                     @endforeach
                 </tbody>
             </table>
         </div>
+
+        <!-- Jami to'langan -->
+        <div class="px-4 py-2 border-t border-slate-700/50 flex items-center justify-between bg-slate-800/60">
+            <span class="text-sm text-emerald-400 font-medium">Jami to'langan:</span>
+            <span class="text-lg font-bold text-emerald-400">{{ number_format($approvedPayments->sum('summa'), 0, '', ' ') }} UZS</span>
+        </div>
         @else
         <div class="px-4 py-6 text-center text-slate-500 text-sm">To'lovlar yo'q</div>
         @endif
-
-        @if($contract->avans_balans > 0)
-        <div class="px-4 py-2 border-t border-slate-700/50 flex items-center justify-between">
-            <span class="text-sm text-purple-400">Avans balans</span>
-            <span class="text-lg font-bold text-purple-400">{{ number_format($contract->avans_balans, 0, '', ' ') }}</span>
-        </div>
-        @endif
     </div>
+
+    <!-- Qaytarishlar tarixi (Refunds) - КРАСНАЯ СЕКЦИЯ -->
+    @if($refundPayments->count() > 0)
+    <div class="bg-red-900/30 backdrop-blur border-2 border-red-500/60 rounded-xl overflow-hidden mt-4">
+        <div class="px-4 py-2 border-b border-red-500/50 flex items-center justify-between bg-red-900/40">
+            <h3 class="font-bold text-red-300 text-sm flex items-center gap-2">
+                <svg class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/>
+                </svg>
+                Qaytarishlar tarixi
+            </h3>
+            <span class="text-xs text-red-300 font-bold bg-red-500/30 px-2 py-0.5 rounded">{{ $refundPayments->count() }} ta</span>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-xs">
+                <thead class="bg-red-900/40 text-red-200">
+                    <tr>
+                        <th class="border border-red-500/40 px-2 py-1.5 text-left">Sana</th>
+                        <th class="border border-red-500/40 px-2 py-1.5 text-right">Summa</th>
+                        <th class="border border-red-500/40 px-2 py-1.5 text-left">Sabab</th>
+                        <th class="border border-red-500/40 px-2 py-1.5 text-left">Manba</th>
+                        <th class="border border-red-500/40 px-2 py-1.5 text-left">Hujjat</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($refundPayments->sortByDesc('tolov_sanasi') as $refund)
+                    @php
+                        $refundDate = \Carbon\Carbon::parse($refund->tolov_sanasi);
+                        $izohParts = explode(' | ', $refund->izoh ?? '');
+                        $sabab = '';
+                        $manba = '';
+                        $hujjat = '';
+                        foreach($izohParts as $part) {
+                            if (str_starts_with($part, 'QAYTARISH:')) {
+                                $sabab = trim(str_replace('QAYTARISH:', '', $part));
+                            } elseif (str_starts_with($part, 'Manba:')) {
+                                $manba = trim(str_replace('Manba:', '', $part));
+                            } elseif (str_starts_with($part, 'Hujjat:')) {
+                                $hujjat = trim(str_replace('Hujjat:', '', $part));
+                            }
+                        }
+                    @endphp
+                    <tr class="bg-red-900/20 hover:bg-red-900/30">
+                        <td class="border border-red-500/40 px-2 py-1.5 text-red-100 font-medium">{{ $refundDate->format('d.m.Y') }}</td>
+                        <td class="border border-red-500/40 px-2 py-1.5 text-right text-red-400 font-bold text-sm">{{ number_format($refund->summa, 0, '', ' ') }}</td>
+                        <td class="border border-red-500/40 px-2 py-1.5 text-red-200">{{ $sabab ?: '—' }}</td>
+                        <td class="border border-red-500/40 px-2 py-1.5 text-red-300 text-[10px]" title="{{ $manba }}">{{ Str::limit($manba, 20) ?: '—' }}</td>
+                        <td class="border border-red-500/40 px-2 py-1.5 text-red-300">{{ $hujjat ?: ($refund->hujjat_raqami ?? '—') }}</td>
+                    </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+
+        <div class="px-4 py-2 border-t border-red-500/50 flex items-center justify-between bg-red-900/40">
+            <span class="text-sm text-red-300 font-medium">Jami qaytarilgan:</span>
+            <span class="text-lg font-bold text-red-400">{{ number_format(abs($refundPayments->sum('summa')), 0, '', ' ') }} UZS</span>
+        </div>
+    </div>
+    @endif
 
     <!-- Payment Modal (Simplified) -->
     <div x-show="showPaymentModal" x-cloak class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" @click.self="showPaymentModal=false">
