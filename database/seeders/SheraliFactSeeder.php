@@ -9,6 +9,7 @@ use App\Models\Lot;
 use App\Models\Tenant;
 use App\Models\Contract;
 use App\Models\Payment;
+use App\Models\PaymentSchedule;
 use Carbon\Carbon;
 
 /**
@@ -52,8 +53,24 @@ class SheraliFactSeeder extends Seeder
 
         // Clear existing imported payments from this source
         $this->command->info('Clearing previous imports...');
-        $deleted = Payment::where('izoh', 'LIKE', '%sayilgoh_fakt_cv%')->delete();
+        $deleted = Payment::where('izoh', 'LIKE', '%sayilgoh_fakt_cv%')->forceDelete();
         $this->command->info("Deleted {$deleted} previous imports");
+
+        // Reset ALL payment_schedules to initial state (important!)
+        $this->command->info('Resetting payment schedules to initial state...');
+        $resetCount = DB::table('payment_schedules')->update([
+            'tolangan_summa' => 0,
+            'qoldiq_summa' => DB::raw('tolov_summasi'),
+            'tolangan_penya' => 0,
+            'penya_summasi' => 0,
+            'kechikish_kunlari' => 0,
+            'holat' => 'kutilmoqda',
+        ]);
+        $this->command->info("Reset {$resetCount} payment schedules");
+
+        // Reset contract advance balances
+        DB::table('contracts')->update(['avans_balans' => 0]);
+        $this->command->info('Reset contract advance balances');
         $this->command->info('');
 
         // Build lookup caches
@@ -187,14 +204,8 @@ class SheraliFactSeeder extends Seeder
             return;
         }
 
-        // Skip non-rental transactions (budget returns, refunds)
-        if ($this->shouldSkip($purpose, $accountInfo)) {
-            $this->skipped[] = [
-                'row' => $rowNumber,
-                'reason' => 'Non-rental/Budget return',
-            ];
-            return;
-        }
+        // Check if this is a REFUND transaction (will be recorded with special status)
+        $refundInfo = $this->isRefund($purpose, $accountInfo);
 
         // Generate unique key for duplicate detection
         $uniqueKey = $date->format('Y-m-d') . '_' . $docNumber . '_' . $amount;
@@ -220,38 +231,101 @@ class SheraliFactSeeder extends Seeder
                 'tenant_name' => '-',
                 'amount' => $amount,
                 'purpose' => mb_substr($purpose, 0, 80),
+                'is_refund' => $refundInfo !== null,
             ];
             return;
         }
 
-        // Create payment
-        $this->createPayment($contract, $date, $amount, $docNumber, $purpose, $lotRef, $matchedBy, $rowNumber);
+        // Create payment (with refund info if applicable)
+        $this->createPayment($contract, $date, $amount, $docNumber, $purpose, $lotRef, $matchedBy, $rowNumber, $refundInfo);
 
+        $matchType = $refundInfo ? 'refund' : $matchedBy;
         $this->matched[] = [
             'row' => $rowNumber,
             'date' => $date->format('d.m.Y'),
             'lot_number' => $contract->lot->lot_raqami ?? $lotRef,
             'tenant_name' => $contract->tenant->name ?? '-',
             'amount' => $amount,
-            'match_by' => $matchedBy,
+            'match_by' => $matchType,
+            'is_refund' => $refundInfo !== null,
+            'refund_reason' => $refundInfo['reason'] ?? null,
         ];
     }
 
-    private function shouldSkip(string $purpose, string $accountInfo): bool
+    /**
+     * Check if transaction is a REFUND/RETURN (not to be skipped, but recorded differently)
+     * Returns array with refund info if it's a refund, null otherwise
+     */
+    private function isRefund(string $purpose, string $accountInfo): ?array
     {
-        $skipPatterns = [
-            'Возвратить по предприятию',
-            'BUDJET',
-            'Ягона газна хисобвараги',
-            'НОТЎҒРИ УТКАЗИЛГАН',
-            'QAYTARILDI',
+        // Patterns that indicate REFUND/RETURN transactions
+        $refundPatterns = [
+            'Возвратить по предприятию' => 'Korxonaga qaytarish',
+            'Возвратить' => 'Qaytarish',
+            '$BUDJET$' => 'Byudjet qaytarishi',
+            'возврат' => 'Qaytarish',
+            'qaytarish' => 'Qaytarish',
+            'согласно заключения ГНИ' => 'Soliq inspeksiyasi qarori',
         ];
 
-        foreach ($skipPatterns as $pattern) {
-            if (mb_stripos($purpose, $pattern) !== false) return true;
-            if (mb_stripos($accountInfo, $pattern) !== false) return true;
+        // Check for refund patterns
+        foreach ($refundPatterns as $pattern => $reason) {
+            if (mb_stripos($purpose, $pattern) !== false) {
+                return [
+                    'is_refund' => true,
+                    'reason' => $reason,
+                    'source' => $this->extractRefundSource($accountInfo, $purpose),
+                    'reference' => $this->extractRefundReference($purpose),
+                ];
+            }
         }
-        return false;
+
+        // Check if from treasury account
+        $treasuryPatterns = [
+            'Иктисодиёт ва молия вазирлиги',
+            'газна хисобвараги',
+            '23402000300100001010',
+        ];
+
+        foreach ($treasuryPatterns as $pattern) {
+            if (mb_stripos($accountInfo, $pattern) !== false) {
+                if (mb_stripos($purpose, 'Возвратить') !== false ||
+                    mb_stripos($purpose, 'возврат') !== false ||
+                    mb_stripos($purpose, '$BUDJET$') !== false) {
+                    return [
+                        'is_refund' => true,
+                        'reason' => 'Byudjetdan qaytarish',
+                        'source' => 'Moliya vazirligi / Yagona gazna',
+                        'reference' => $this->extractRefundReference($purpose),
+                    ];
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private function extractRefundSource(string $accountInfo, string $purpose): string
+    {
+        $parts = explode('/', $accountInfo);
+        if (count($parts) >= 3) {
+            return trim($parts[2]);
+        }
+        if (preg_match('/ИНН[:\s]*(\d+)/i', $purpose, $matches)) {
+            return 'INN: ' . $matches[1];
+        }
+        return 'Noma\'lum manba';
+    }
+
+    private function extractRefundReference(string $purpose): ?string
+    {
+        if (preg_match('/ГНИ\s*№?\s*(\d+)/i', $purpose, $matches)) {
+            return 'GNI №' . $matches[1];
+        }
+        if (preg_match('/Ч\/О\s*№?\s*(\d+)/i', $purpose, $matches)) {
+            return 'CH/O №' . $matches[1];
+        }
+        return null;
     }
 
     private function findContract(string $lotRef, string $purpose): ?Contract
@@ -325,28 +399,45 @@ class SheraliFactSeeder extends Seeder
         string $purpose,
         string $lotRef,
         string $matchedBy,
-        int $rowNumber
+        int $rowNumber,
+        ?array $refundInfo = null
     ): void {
         try {
             DB::beginTransaction();
+
+            // Determine if this is a refund
+            $isRefund = $refundInfo !== null;
+
+            // Build detailed izoh for refunds
+            $izohParts = ['sayilgoh_fakt_cv Row:' . $rowNumber, 'Ref:' . $lotRef];
+            if ($isRefund) {
+                $izohParts[] = 'QAYTARISH: ' . ($refundInfo['reason'] ?? 'Noma\'lum');
+                if (!empty($refundInfo['source'])) {
+                    $izohParts[] = 'Manba: ' . $refundInfo['source'];
+                }
+                if (!empty($refundInfo['reference'])) {
+                    $izohParts[] = 'Hujjat: ' . $refundInfo['reference'];
+                }
+            }
 
             $payment = Payment::create([
                 'contract_id' => $contract->id,
                 'tolov_raqami' => Payment::generateTolovRaqami(),
                 'tolov_sanasi' => $date,
-                'summa' => $amount,
+                'summa' => $isRefund ? -abs($amount) : $amount, // Negative amount for refunds
                 'asosiy_qarz_uchun' => 0,
                 'penya_uchun' => 0,
                 'auksion_uchun' => 0,
                 'avans' => 0,
-                'tolov_usuli' => $this->getPaymentMethod($purpose),
+                'tolov_usuli' => 'bank_otkazmasi', // Use bank_otkazmasi for all (refunds identified by holat)
                 'hujjat_raqami' => $docNumber,
-                'holat' => 'tasdiqlangan',
-                'izoh' => 'sayilgoh_fakt_cv Row:' . $rowNumber . ' Ref:' . $lotRef,
+                'holat' => $isRefund ? 'qaytarilgan' : 'tasdiqlangan',
+                'izoh' => implode(' | ', $izohParts),
             ]);
 
-            // Apply payment to schedules (FIFO with penalty priority)
-            $payment->applyToContract();
+            // Note: For regular payments with 'tasdiqlangan' status,
+            // PaymentObserver automatically applies the payment to schedules.
+            // For refunds ('qaytarilgan'), we do NOT apply to schedules.
 
             DB::commit();
         } catch (\Exception $e) {
@@ -355,6 +446,7 @@ class SheraliFactSeeder extends Seeder
                 'row' => $rowNumber,
                 'error' => $e->getMessage(),
                 'contract_id' => $contract->id,
+                'is_refund' => $isRefund ?? false,
             ]);
 
             $this->skipped[] = [
@@ -431,12 +523,30 @@ class SheraliFactSeeder extends Seeder
         $this->command->info('╚════════════════════════════════════════════════════════════════════════════╝');
         $this->command->info('');
 
-        // Matched
-        $matchedCount = count($this->matched);
-        $matchedSum = array_sum(array_column($this->matched, 'amount'));
+        // Separate refunds from regular payments
+        $refunds = array_filter($this->matched, fn($m) => $m['is_refund'] ?? false);
+        $regularPayments = array_filter($this->matched, fn($m) => !($m['is_refund'] ?? false));
+
+        // Regular Matched Payments
+        $matchedCount = count($regularPayments);
+        $matchedSum = array_sum(array_column($regularPayments, 'amount'));
         $this->command->info("✓ MATCHED PAYMENTS: {$matchedCount}");
         $this->command->info("  Total amount: " . number_format($matchedSum, 2) . " UZS");
         $this->command->info('');
+
+        // Refunds
+        $refundCount = count($refunds);
+        $refundSum = array_sum(array_column($refunds, 'amount'));
+        if ($refundCount > 0) {
+            $this->command->comment("↩ REFUNDS RECORDED: {$refundCount}");
+            $this->command->comment("  Total refund amount: " . number_format($refundSum, 2) . " UZS");
+            foreach ($refunds as $r) {
+                $this->command->comment(sprintf('    Row %d: %s | -%s | %s',
+                    $r['row'], $r['lot_number'], number_format($r['amount'], 2), $r['refund_reason'] ?? ''
+                ));
+            }
+            $this->command->info('');
+        }
 
         // Unmatched
         $unmatchedCount = count($this->unmatched);
@@ -447,15 +557,17 @@ class SheraliFactSeeder extends Seeder
         if ($unmatchedCount > 0 && $unmatchedCount <= 30) {
             $this->command->info('');
             foreach ($this->unmatched as $u) {
-                $this->command->warn(sprintf('  Row %d: %s | %s',
-                    $u['row'], $u['lot_number'], number_format($u['amount'], 2)
+                $refundMark = ($u['is_refund'] ?? false) ? ' [REFUND]' : '';
+                $this->command->warn(sprintf('  Row %d: %s | %s%s',
+                    $u['row'], $u['lot_number'], number_format($u['amount'], 2), $refundMark
                 ));
             }
         } elseif ($unmatchedCount > 30) {
             $this->command->warn("  (Showing first 30 of {$unmatchedCount})");
             foreach (array_slice($this->unmatched, 0, 30) as $u) {
-                $this->command->warn(sprintf('  Row %d: %s | %s',
-                    $u['row'], $u['lot_number'], number_format($u['amount'], 2)
+                $refundMark = ($u['is_refund'] ?? false) ? ' [REFUND]' : '';
+                $this->command->warn(sprintf('  Row %d: %s | %s%s',
+                    $u['row'], $u['lot_number'], number_format($u['amount'], 2), $refundMark
                 ));
             }
         }
@@ -483,9 +595,12 @@ class SheraliFactSeeder extends Seeder
 
         // Final summary
         $this->command->info('╔════════════════════════════════════════════════════════════════════════════╗');
-        $total = $matchedCount + $unmatchedCount + $skippedCount + count($this->duplicates);
+        $total = count($this->matched) + $unmatchedCount + $skippedCount + count($this->duplicates);
         $this->command->info("║  Total processed: {$total}");
         $this->command->info("║  ✓ Imported:      {$matchedCount} (" . number_format($matchedSum, 0) . " UZS)");
+        if ($refundCount > 0) {
+            $this->command->comment("║  ↩ Refunds:       {$refundCount} (" . number_format($refundSum, 0) . " UZS)");
+        }
         $this->command->warn("║  ✗ Failed:        {$unmatchedCount} (" . number_format($unmatchedSum, 0) . " UZS)");
         $this->command->comment("║  ○ Skipped:       {$skippedCount}");
         $this->command->info('╚════════════════════════════════════════════════════════════════════════════╝');
