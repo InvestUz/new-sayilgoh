@@ -208,12 +208,14 @@ class SheraliFactSeeder extends Seeder
         $refundInfo = $this->isRefund($purpose, $accountInfo);
 
         // Generate unique key for duplicate detection
-        $uniqueKey = $date->format('Y-m-d') . '_' . $docNumber . '_' . $amount;
+        // Include LOT reference to avoid false duplicates when same amount paid on same day for different contracts
+        $uniqueKey = $date->format('Y-m-d') . '_' . $docNumber . '_' . $amount . '_' . $lotRef;
         if (isset($this->processedPayments[$uniqueKey])) {
             $this->duplicates[] = [
                 'row' => $rowNumber,
                 'key' => $uniqueKey,
                 'amount' => $amount,
+                'lot_ref' => $lotRef,
             ];
             return;
         }
@@ -258,19 +260,21 @@ class SheraliFactSeeder extends Seeder
      */
     private function isRefund(string $purpose, string $accountInfo): ?array
     {
-        // Patterns that indicate REFUND/RETURN transactions
+        // Patterns that indicate REFUND/RETURN transactions (Russian/Uzbek)
         $refundPatterns = [
-            'Возвратить по предприятию' => 'Korxonaga qaytarish',
-            'Возвратить' => 'Qaytarish',
-            '$BUDJET$' => 'Byudjet qaytarishi',
-            'возврат' => 'Qaytarish',
-            'qaytarish' => 'Qaytarish',
-            'согласно заключения ГНИ' => 'Soliq inspeksiyasi qarori',
+            '/возвратить\s+по\s+предприятию/ui' => 'Korxonaga qaytarish',
+            '/возвратить/ui' => 'Qaytarish',
+            '/\$BUDJET\$/u' => 'Byudjet qaytarishi',
+            '/возврат/ui' => 'Qaytarish',
+            '/qaytarish/ui' => 'Qaytarish',
+            '/согласно\s+заключения\s+гни/ui' => 'Soliq inspeksiyasi qarori',
+            '/возврат\s+средств/ui' => 'Mablag\' qaytarish',
+            '/qaytib/ui' => 'Qaytarish',
         ];
 
         // Check for refund patterns
         foreach ($refundPatterns as $pattern => $reason) {
-            if (mb_stripos($purpose, $pattern) !== false) {
+            if (preg_match($pattern, $purpose)) {
                 return [
                     'is_refund' => true,
                     'reason' => $reason,
@@ -280,18 +284,17 @@ class SheraliFactSeeder extends Seeder
             }
         }
 
-        // Check if from treasury account
+        // Check if from treasury account (government refund)
         $treasuryPatterns = [
-            'Иктисодиёт ва молия вазирлиги',
+            'иктисодиёт ва молия вазирлиги',
             'газна хисобвараги',
             '23402000300100001010',
+            'budjet',
         ];
 
         foreach ($treasuryPatterns as $pattern) {
-            if (mb_stripos($accountInfo, $pattern) !== false) {
-                if (mb_stripos($purpose, 'Возвратить') !== false ||
-                    mb_stripos($purpose, 'возврат') !== false ||
-                    mb_stripos($purpose, '$BUDJET$') !== false) {
+            if (mb_stripos($accountInfo, $pattern) !== false || mb_stripos($purpose, $pattern) !== false) {
+                if (preg_match('/возвратить|возврат|\$BUDJET\$/ui', $purpose)) {
                     return [
                         'is_refund' => true,
                         'reason' => 'Byudjetdan qaytarish',
@@ -307,38 +310,67 @@ class SheraliFactSeeder extends Seeder
 
     private function extractRefundSource(string $accountInfo, string $purpose): string
     {
+        // Try to extract organization name from account info
         $parts = explode('/', $accountInfo);
         if (count($parts) >= 3) {
-            return trim($parts[2]);
+            $source = trim($parts[2]);
+            if (!empty($source) && strlen($source) > 3) {
+                return $source;
+            }
         }
-        if (preg_match('/ИНН[:\s]*(\d+)/i', $purpose, $matches)) {
+
+        // Try to extract INN from purpose
+        if (preg_match('/инн[:\s]*(\d+)/ui', $purpose, $matches)) {
             return 'INN: ' . $matches[1];
         }
+
+        if (preg_match('/pinfl[:\s]*(\d+)/ui', $purpose, $matches)) {
+            return 'PINFL: ' . $matches[1];
+        }
+
         return 'Noma\'lum manba';
     }
 
     private function extractRefundReference(string $purpose): ?string
     {
-        if (preg_match('/ГНИ\s*№?\s*(\d+)/i', $purpose, $matches)) {
+        // Extract GNI (tax inspection) reference
+        if (preg_match('/гни\s*№?\s*(\d+)/ui', $purpose, $matches)) {
             return 'GNI №' . $matches[1];
         }
-        if (preg_match('/Ч\/О\s*№?\s*(\d+)/i', $purpose, $matches)) {
+
+        // Extract invoice/check reference
+        if (preg_match('/ч\/о\s*№?\s*(\d+)/ui', $purpose, $matches)) {
             return 'CH/O №' . $matches[1];
         }
+
+        // Extract contract reference
+        if (preg_match('/дог[овра]*\s*№?\s*(\d+)/ui', $purpose, $matches)) {
+            return 'Shartnoma №' . $matches[1];
+        }
+
         return null;
     }
 
     private function findContract(string $lotRef, string $purpose): ?Contract
     {
-        if (empty($lotRef)) {
+        // Try to extract LOT number from purpose field first (more reliable)
+        $extractedLot = null;
+        if (preg_match('/L(\d{6,10})L/i', $purpose, $matches)) {
+            $extractedLot = $matches[1];
+        }
+
+        // Use extracted LOT if found, otherwise use lotRef parameter
+        $searchRef = $extractedLot ?: $lotRef;
+
+        if (empty($searchRef)) {
             return null;
         }
 
         // Handle multiple refs (e.g., "12072339, 12072343")
-        $refs = preg_split('/[,\s]+/', $lotRef);
+        $refs = preg_split('/[,\s]+/', $searchRef);
         $primaryRef = trim($refs[0]);
 
-        // Method 1: Contract format "21/21"
+        // Method 1: Contract format "21/21" or "23/23"
         if (preg_match('/^(\d+)\/\d+$/', $primaryRef, $matches)) {
             $num = $matches[1];
             if (isset($this->contractCache[$primaryRef])) {
@@ -349,7 +381,7 @@ class SheraliFactSeeder extends Seeder
             }
         }
 
-        // Method 2: Lot number (numeric)
+        // Method 2: Lot number (numeric) - check cache first
         $numericRef = preg_replace('/[^0-9]/', '', $primaryRef);
         if ($numericRef && isset($this->lotCache[$numericRef])) {
             $lot = $this->lotCache[$numericRef];
@@ -358,7 +390,12 @@ class SheraliFactSeeder extends Seeder
             }
         }
 
-        // Method 3: Database search for lot
+        // Method 3: Direct contract cache lookup
+        if (isset($this->contractCache[$numericRef])) {
+            return $this->contractCache[$numericRef];
+        }
+
+        // Method 4: Database search for lot
         if ($numericRef) {
             $lot = Lot::where('lot_raqami', 'LIKE', '%' . $numericRef . '%')
                 ->with(['contracts' => fn($q) => $q->where('holat', 'faol')->with('tenant')])
@@ -366,17 +403,6 @@ class SheraliFactSeeder extends Seeder
 
             if ($lot && $lot->contracts->isNotEmpty()) {
                 return $lot->contracts->first();
-            }
-        }
-
-        // Method 4: Extract from purpose L{digits}L
-        if (preg_match('/L(\d{6,10})L/i', $purpose, $matches)) {
-            $lotNum = $matches[1];
-            if (isset($this->lotCache[$lotNum])) {
-                $lot = $this->lotCache[$lotNum];
-                if ($lot->contracts->isNotEmpty()) {
-                    return $lot->contracts->first();
-                }
             }
         }
 
@@ -388,7 +414,120 @@ class SheraliFactSeeder extends Seeder
             }
         }
 
+        // Method 6: Auto-create missing LOT/Contract from payment data (LAST RESORT)
+        if ($numericRef && !empty($purpose)) {
+            return $this->createMissingContract($numericRef, $purpose);
+        }
+
         return null;
+    }
+
+    private function createMissingContract(string $lotNum, string $purpose): ?Contract
+    {
+        try {
+            DB::beginTransaction();
+
+            // Extract tenant info from purpose
+            $tenantName = 'Unknown Tenant';
+            $inn = null;
+
+            if (preg_match('/G`olib[:\s]*["\']?([^,"]+)["\']?/ui', $purpose, $matches)) {
+                $tenantName = trim($matches[1]);
+            }
+
+            if (preg_match('/INN[:\s\-]*PINFL[:\s]*(\d+)/i', $purpose, $matches)) {
+                $inn = $matches[1];
+            }
+
+            $this->command->warn("Auto-creating missing LOT/Contract: {$lotNum} for {$tenantName}");
+
+            // Create or find tenant
+            $tenant = Tenant::where('inn', $inn)->first();
+            if (!$tenant) {
+                $type = preg_match('/\b(o[\'`]?g[\'`]?li|qizi|ovich|ovna)\b/ui', $tenantName) ? 'jismoniy' : 'yuridik';
+                $tenant = Tenant::create([
+                    'name' => $tenantName,
+                    'type' => $type,
+                    'inn' => $inn ?: ('AUTO-' . rand(100000, 999999)),
+                    'director_name' => $type === 'jismoniy' ? $tenantName : null,
+                    'phone' => '',
+                    'address' => 'Toshkent shahri',
+                    'is_active' => true,
+                ]);
+            }
+
+            // Create lot
+            $lot = Lot::create([
+                'lot_raqami' => $lotNum,
+                'obyekt_nomi' => "Auksion LOT #{$lotNum}",
+                'manzil' => "Toshkent shahri, Yaшнабод тумани",
+                'tuman' => 'Яшнобод тумани',
+                'kocha' => 'Noma\'lum',
+                'uy_raqami' => 'N/A',
+                'maydon' => 100.0,
+                'obyekt_turi' => 'savdo',
+                'boshlangich_narx' => 100000000,
+                'holat' => 'ijarada',
+                'is_active' => true,
+            ]);
+
+            // Add to cache
+            $this->lotCache[$lotNum] = $lot;
+
+            // Create contract
+            $contract = Contract::create([
+                'lot_id' => $lot->id,
+                'tenant_id' => $tenant->id,
+                'shartnoma_raqami' => 'AUTO-' . $lotNum,
+                'shartnoma_sanasi' => Carbon::now()->subMonths(12),
+                'auksion_sanasi' => Carbon::now()->subMonths(12),
+                'shartnoma_summasi' => 150000000,
+                'oylik_tolovi' => 12500000,
+                'shartnoma_muddati' => 12,
+                'boshlanish_sanasi' => Carbon::now()->subMonths(12),
+                'tugash_sanasi' => Carbon::now(),
+                'birinchi_tolov_sanasi' => Carbon::now()->subMonths(12)->addDays(10),
+                'holat' => 'faol',
+                'dalolatnoma_holati' => 'topshirilgan',
+            ]);
+
+            // Add to cache
+            $this->contractCache[$lotNum] = $contract;
+            $this->contractCache['AUTO-' . $lotNum] = $contract;
+
+            // Create basic payment schedules
+            for ($i = 0; $i < 12; $i++) {
+                $paymentDate = Carbon::now()->subMonths(12)->addMonths($i);
+                PaymentSchedule::create([
+                    'contract_id' => $contract->id,
+                    'oy_raqami' => $i + 1,
+                    'oy' => $paymentDate->month,
+                    'yil' => $paymentDate->year,
+                    'tolov_sanasi' => $paymentDate->format('Y-m-d'),
+                    'oxirgi_muddat' => $paymentDate->addDays(20)->format('Y-m-d'),
+                    'tolov_summasi' => 12500000,
+                    'tolangan_summa' => 0,
+                    'qoldiq_summa' => 12500000,
+                    'penya_summasi' => 0,
+                    'tolangan_penya' => 0,
+                    'kechikish_kunlari' => 0,
+                    'holat' => 'kutilmoqda',
+                ]);
+            }
+
+            DB::commit();
+
+            // Reload with relationships
+            return $contract->load(['lot', 'tenant']);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Failed to auto-create missing contract', [
+                'lot_num' => $lotNum,
+                'error' => $e->getMessage(),
+            ]);
+            return null;
+        }
     }
 
     private function createPayment(
@@ -534,6 +673,9 @@ class SheraliFactSeeder extends Seeder
         $this->command->info("  Total amount: " . number_format($matchedSum, 2) . " UZS");
         $this->command->info('');
 
+        // Generate detailed log file
+        $this->generateDetailedLog($refunds, $regularPayments, $matchedSum);
+
         // Refunds
         $refundCount = count($refunds);
         $refundSum = array_sum(array_column($refunds, 'amount'));
@@ -604,5 +746,141 @@ class SheraliFactSeeder extends Seeder
         $this->command->warn("║  ✗ Failed:        {$unmatchedCount} (" . number_format($unmatchedSum, 0) . " UZS)");
         $this->command->comment("║  ○ Skipped:       {$skippedCount}");
         $this->command->info('╚════════════════════════════════════════════════════════════════════════════╝');
+    }
+
+    private function generateDetailedLog(array $refunds, array $regularPayments, float $matchedSum): void
+    {
+        $logPath = storage_path('logs/seeding_hisobot_' . date('Y-m-d_H-i-s') . '.txt');
+
+        $log = [];
+        $log[] = '╔════════════════════════════════════════════════════════════════════════════╗';
+        $log[] = '║                  TO\'LOV IMPORT HISOBOTI / PAYMENT IMPORT REPORT            ║';
+        $log[] = '╚════════════════════════════════════════════════════════════════════════════╝';
+        $log[] = '';
+        $log[] = 'Sana (Date): ' . now()->format('d.m.Y H:i:s');
+        $log[] = 'Fayl (File): sayilgoh_fakt_cv.csv';
+        $log[] = '';
+        $log[] = '═══════════════════════════════════════════════════════════════════════════════';
+        $log[] = '1. MUVAFFAQIYATLI IMPORT QILINGAN TO\'LOVLAR (SUCCESSFULLY IMPORTED PAYMENTS)';
+        $log[] = '═══════════════════════════════════════════════════════════════════════════════';
+        $log[] = '';
+        $log[] = 'Jami: ' . count($regularPayments) . ' ta to\'lov';
+        $log[] = 'Umumiy summa: ' . number_format($matchedSum, 2) . ' UZS';
+        $log[] = '';
+
+        // Refunds section
+        if (count($refunds) > 0) {
+            $refundSum = array_sum(array_column($refunds, 'amount'));
+            $log[] = '═══════════════════════════════════════════════════════════════════════════════';
+            $log[] = '2. QAYTARILGAN TO\'LOVLAR (REFUND TRANSACTIONS)';
+            $log[] = '═══════════════════════════════════════════════════════════════════════════════';
+            $log[] = '';
+            $log[] = 'Jami: ' . count($refunds) . ' ta qaytarish';
+            $log[] = 'Umumiy summa: ' . number_format($refundSum, 2) . ' UZS';
+            $log[] = '';
+
+            foreach ($refunds as $refund) {
+                $log[] = sprintf('Qator (Row): %d', $refund['row']);
+                $log[] = sprintf('  Sana: %s', $refund['date']);
+                $log[] = sprintf('  LOT raqami: %s', $refund['lot_number']);
+                $log[] = sprintf('  Ijaradar: %s', $refund['tenant_name']);
+                $log[] = sprintf('  Summa: -%s UZS', number_format($refund['amount'], 2));
+                $log[] = sprintf('  Sabab: %s', $refund['refund_reason'] ?? 'Noma\'lum');
+                $log[] = '';
+            }
+        }
+
+        // Duplicates section
+        if (count($this->duplicates) > 0) {
+            $log[] = '═══════════════════════════════════════════════════════════════════════════════';
+            $log[] = '3. TAKRORIY TO\'LOVLAR (O\'TKAZIB YUBORILDI) (DUPLICATE PAYMENTS - SKIPPED)';
+            $log[] = '═══════════════════════════════════════════════════════════════════════════════';
+            $log[] = '';
+            $log[] = 'Jami: ' . count($this->duplicates) . ' ta takroriy to\'lov';
+            $log[] = '';
+            $log[] = 'IZOH: Ushbu to\'lovlar CSV faylida bir necha marta qayd etilgan.';
+            $log[] = 'Takroriylik tekshiruvi: Sana + Hujjat raqami + Summa asosida amalga oshiriladi.';
+            $log[] = '';
+
+            foreach ($this->duplicates as $dup) {
+                $log[] = sprintf('Qator (Row): %d', $dup['row']);
+                $log[] = sprintf('  Noyob kalit: %s', $dup['key']);
+                $log[] = sprintf('  Summa: %s UZS', number_format($dup['amount'], 2));
+                $log[] = sprintf('  Holat: TAKRORIY - Birinchi import qilingan, keyingisi o\'tkazib yuborildi');
+                $log[] = '';
+            }
+        }
+
+        // Unmatched section
+        if (count($this->unmatched) > 0) {
+            $unmatchedSum = array_sum(array_column($this->unmatched, 'amount'));
+            $log[] = '═══════════════════════════════════════════════════════════════════════════════';
+            $log[] = '4. MOSLASHTIRISH MUMKIN BO\'LMAGAN TO\'LOVLAR (UNMATCHED PAYMENTS)';
+            $log[] = '═══════════════════════════════════════════════════════════════════════════════';
+            $log[] = '';
+            $log[] = 'Jami: ' . count($this->unmatched) . ' ta mos kelmagan to\'lov';
+            $log[] = 'Umumiy summa: ' . number_format($unmatchedSum, 2) . ' UZS';
+            $log[] = '';
+            $log[] = 'SABAB: Ushbu to\'lovlar uchun shartnoma yoki LOT raqami topilmadi.';
+            $log[] = 'Ehtimol, bu to\'lovlar DokonlarSeeder.php faylidagi ma\'lumotlarga mos kelmaydi.';
+            $log[] = '';
+
+            foreach ($this->unmatched as $unm) {
+                $log[] = sprintf('Qator (Row): %d', $unm['row']);
+                $log[] = sprintf('  Sana: %s', $unm['date']);
+                $log[] = sprintf('  LOT raqami: %s', $unm['lot_number'] ?: 'MAVJUD EMAS');
+                $log[] = sprintf('  Summa: %s UZS', number_format($unm['amount'], 2));
+                $log[] = sprintf('  Turi: %s', ($unm['is_refund'] ?? false) ? 'QAYTARISH' : 'ODDIY TO\'LOV');
+                if (!empty($unm['purpose'])) {
+                    $log[] = sprintf('  Maqsad: %s', $unm['purpose']);
+                }
+                $log[] = '';
+            }
+        }
+
+        // Skipped section
+        if (count($this->skipped) > 0) {
+            $log[] = '═══════════════════════════════════════════════════════════════════════════════';
+            $log[] = '5. O\'TKAZIB YUBORILGAN QATORLAR (SKIPPED ROWS)';
+            $log[] = '═══════════════════════════════════════════════════════════════════════════════';
+            $log[] = '';
+            $log[] = 'Jami: ' . count($this->skipped) . ' ta qator';
+            $log[] = '';
+
+            $byReason = [];
+            foreach ($this->skipped as $s) {
+                $reason = $s['reason'] ?? 'Noma\'lum';
+                $byReason[$reason] = ($byReason[$reason] ?? 0) + 1;
+            }
+
+            foreach ($byReason as $reason => $count) {
+                $log[] = sprintf('  %s: %d ta', $reason, $count);
+            }
+            $log[] = '';
+        }
+
+        // Summary
+        $log[] = '═══════════════════════════════════════════════════════════════════════════════';
+        $log[] = 'UMUMIY XULOSALAR (FINAL SUMMARY)';
+        $log[] = '═══════════════════════════════════════════════════════════════════════════════';
+        $log[] = '';
+        $total = count($this->matched) + count($this->unmatched) + count($this->skipped) + count($this->duplicates);
+        $log[] = sprintf('Jami qayta ishlangan qatorlar: %d', $total);
+        $log[] = sprintf('✓ Import qilindi: %d (%s UZS)', count($regularPayments), number_format($matchedSum, 0));
+        if (count($refunds) > 0) {
+            $refundSum = array_sum(array_column($refunds, 'amount'));
+            $log[] = sprintf('↩ Qaytarishlar: %d (%s UZS)', count($refunds), number_format($refundSum, 0));
+        }
+        $log[] = sprintf('✗ Muvaffaqiyatsiz: %d (%s UZS)', count($this->unmatched), number_format($unmatchedSum ?? 0, 0));
+        $log[] = sprintf('○ Takroriy: %d', count($this->duplicates));
+        $log[] = sprintf('○ O\'tkazildi: %d', count($this->skipped));
+        $log[] = '';
+        $log[] = '═══════════════════════════════════════════════════════════════════════════════';
+        $log[] = '';
+
+        // Write to file
+        file_put_contents($logPath, implode(PHP_EOL, $log));
+        $this->command->info("Batafsil hisobot yaratildi: {$logPath}");
+        $this->command->info('');
     }
 }

@@ -11,10 +11,10 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // Use real data from dataset.csv
+        // Use real data from Дўконлар тўғрисида маълумотлар.csv
         $this->call([
-            DatasetSeeder::class,
-            SheraliFactSeeder::class,
+            DokonlarSeeder::class,      // Import shops/lots/contracts
+            SheraliFactSeeder::class,   // Import payments from sayilgoh_fakt_cv.csv
         ]);
     }
 }
