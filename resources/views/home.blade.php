@@ -210,7 +210,11 @@ $debtPercent = $total > 0 ? round(($stats['jami_qarzdorlik'] / $total) * 100, 1)
                         $paid = $schedules->sum('tolangan_summa');
                         $debt = $schedules->sum('qoldiq_summa');
                         $penya = max(0, $schedules->sum('penya_summasi') - $schedules->sum('tolangan_penya'));
-                        $overdue = $schedules->where('oxirgi_muddat', '<', now())->where('qoldiq_summa', '>', 0)->count();
+                        // Use effective deadline (custom if set, otherwise original)
+                        $overdue = $schedules->filter(function($s) {
+                            $effectiveDeadline = $s->custom_oxirgi_muddat ?? $s->oxirgi_muddat;
+                            return \Carbon\Carbon::parse($effectiveDeadline)->lt(now()) && $s->qoldiq_summa > 0;
+                        })->count();
                     @endphp
                     <tr>
                         <td>

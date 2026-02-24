@@ -59,9 +59,9 @@ try {
         $penyaUchun = 0;
         $asosiyQarz = 0;
 
-        // Получить просроченные месяцы на дату платежа
+        // Получить просроченные месяцы на дату платежа (using effective deadline)
         $schedules = $contract->paymentSchedules()
-            ->where('oxirgi_muddat', '<', $tolovSanasi)
+            ->whereRaw('COALESCE(custom_oxirgi_muddat, oxirgi_muddat) < ?', [$tolovSanasi])
             ->orderBy('oy_raqami')
             ->get();
 
@@ -70,15 +70,17 @@ try {
         foreach ($schedules as $schedule) {
             if ($qoldiqSumma <= 0) break;
 
-            echo "\n  Oy {$schedule->oy_raqami} (muddat: {$schedule->oxirgi_muddat}):\n";
+            // Use effective deadline
+            $effectiveDeadline = $schedule->custom_oxirgi_muddat ?? $schedule->oxirgi_muddat;
+            echo "\n  Oy {$schedule->oy_raqami} (muddat: {$effectiveDeadline}):\n";
 
-            // Рассчитать пеню на дату платежа
-            $muddat = Carbon::parse($schedule->oxirgi_muddat);
+            // Рассчитать пеню на дату платежа using effective deadline
+            $muddat = Carbon::parse($effectiveDeadline);
             $kunlar = $muddat->diffInDays($tolovSanasi);
             $qoldiqQarz = (float) $schedule->qoldiq_summa;
 
-            // Пеня = qoldiq × 0.4% × дни (макс 50%)
-            $penya = $qoldiqQarz * 0.004 * $kunlar;
+            // Пеня = qoldiq × 0.04% × дни (макс 50%)
+            $penya = $qoldiqQarz * 0.0004 * $kunlar;
             $maxPenya = $qoldiqQarz * 0.5;
             $penya = min($penya, $maxPenya);
 

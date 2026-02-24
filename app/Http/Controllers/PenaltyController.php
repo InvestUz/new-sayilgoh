@@ -14,7 +14,7 @@ use Illuminate\View\View;
 
 /**
  * PenaltyController - Manual penalty verification and notification generation
- * 
+ *
  * Contract clause 8.2 compliance:
  * - Penalty rate: 0.4% per day
  * - Penalty cap: 50% of overdue amount
@@ -89,10 +89,10 @@ class PenaltyController extends Controller
     {
         $contract->load(['tenant', 'lot', 'paymentSchedules']);
 
-        // Get overdue schedules for quick calculation
+        // Get overdue schedules for quick calculation (using effective deadline)
         $overdueSchedules = $contract->paymentSchedules()
             ->where('qoldiq_summa', '>', 0)
-            ->where('oxirgi_muddat', '<', Carbon::today())
+            ->whereRaw('COALESCE(custom_oxirgi_muddat, oxirgi_muddat) < ?', [Carbon::today()])
             ->orderBy('oy_raqami')
             ->get();
 
@@ -120,13 +120,13 @@ class PenaltyController extends Controller
 
         $contract = Contract::with(['tenant', 'lot'])->find($validated['contract_id']);
         $schedule = null;
-        
+
         if (!empty($validated['schedule_id'])) {
             $schedule = PaymentSchedule::find($validated['schedule_id']);
         }
 
-        $asOfDate = !empty($validated['as_of_date']) 
-            ? Carbon::parse($validated['as_of_date']) 
+        $asOfDate = !empty($validated['as_of_date'])
+            ? Carbon::parse($validated['as_of_date'])
             : Carbon::today();
 
         try {
@@ -247,12 +247,16 @@ class PenaltyController extends Controller
     {
         $schedule->load('contract');
         $today = Carbon::today();
-        $dueDate = Carbon::parse($schedule->oxirgi_muddat);
+
+        // Use effective deadline (custom if set, otherwise original)
+        $effectiveDeadline = $schedule->custom_oxirgi_muddat
+            ? Carbon::parse($schedule->custom_oxirgi_muddat)
+            : Carbon::parse($schedule->oxirgi_muddat);
 
         // Calculate current penalty
         $calculation = $this->notificationService->calculatePenalty(
             (float) $schedule->qoldiq_summa,
-            $dueDate,
+            $effectiveDeadline,
             $today
         );
 
@@ -263,8 +267,10 @@ class PenaltyController extends Controller
                 'month' => $schedule->oy_raqami,
                 'year' => $schedule->yil,
                 'month_name' => $schedule->davr_nomi,
-                'due_date' => $dueDate->format('Y-m-d'),
-                'due_date_formatted' => $dueDate->format('d.m.Y'),
+                'due_date' => $effectiveDeadline->format('Y-m-d'),
+                'due_date_formatted' => $effectiveDeadline->format('d.m.Y'),
+                'original_due_date' => Carbon::parse($schedule->oxirgi_muddat)->format('d.m.Y'),
+                'has_custom_deadline' => !empty($schedule->custom_oxirgi_muddat),
                 'overdue_amount' => $schedule->qoldiq_summa,
                 'overdue_amount_formatted' => number_format($schedule->qoldiq_summa, 0, ',', ' ') . ' UZS',
                 'system_penalty' => $schedule->penya_summasi,

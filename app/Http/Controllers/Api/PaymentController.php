@@ -150,9 +150,9 @@ class PaymentController extends Controller
         ];
 
         // Faqat TO'LOV SANASIGA QADAR muddati o'tgan oylarni olish
-        // oxirgi_muddat < tolov_sanasi (deadline already passed at payment time)
+        // Use COALESCE to consider custom deadline if set
         $schedules = $contract->paymentSchedules()
-            ->where('oxirgi_muddat', '<', $tolovSanasi)
+            ->whereRaw('COALESCE(custom_oxirgi_muddat, oxirgi_muddat) < ?', [$tolovSanasi])
             ->whereIn('holat', ['tolanmagan', 'qisman_tolangan'])
             ->orderBy('oy_raqami')
             ->get();
@@ -365,6 +365,7 @@ class PaymentController extends Controller
             $validated = $request->validate([
                 'tolov_sanasi' => 'sometimes|date',
                 'oxirgi_muddat' => 'sometimes|date',
+                'custom_oxirgi_muddat' => 'nullable|date',
                 'tolov_summasi' => 'sometimes|numeric|min:0',
             ]);
 
@@ -381,8 +382,50 @@ class PaymentController extends Controller
                 $schedule->oy = Carbon::parse($validated['tolov_sanasi'])->month;
             }
 
-            if (isset($validated['oxirgi_muddat'])) {
-                $schedule->oxirgi_muddat = $validated['oxirgi_muddat'];
+            // CUSTOM DEADLINE HANDLING
+            if ($request->has('custom_oxirgi_muddat')) {
+                $newDeadline = $validated['custom_oxirgi_muddat'];
+                $originalDeadline = $schedule->oxirgi_muddat;
+                $currentCustom = $schedule->custom_oxirgi_muddat;
+
+                // Determine the "old" date for changelog
+                $oldDate = $currentCustom ? Carbon::parse($currentCustom) : Carbon::parse($originalDeadline);
+
+                // Only log if deadline actually changed
+                if ($newDeadline && $oldDate->format('Y-m-d') !== Carbon::parse($newDeadline)->format('Y-m-d')) {
+                    $schedule->custom_oxirgi_muddat = $newDeadline;
+
+                    // Build change log
+                    $changeLog = sprintf(
+                        "Changed on %s: Old date was %s, changed to %s",
+                        Carbon::now()->format('d.m.Y H:i'),
+                        $oldDate->format('d.m.Y'),
+                        Carbon::parse($newDeadline)->format('d.m.Y')
+                    );
+
+                    // Append to existing log
+                    if ($schedule->muddat_ozgarish_izoh) {
+                        $schedule->muddat_ozgarish_izoh .= "\n" . $changeLog;
+                    } else {
+                        $schedule->muddat_ozgarish_izoh = $changeLog;
+                    }
+                } elseif (!$newDeadline && $currentCustom) {
+                    // Custom deadline removed - reset to original
+                    $schedule->custom_oxirgi_muddat = null;
+
+                    $changeLog = sprintf(
+                        "Reset on %s: Custom date %s removed, reverted to original %s",
+                        Carbon::now()->format('d.m.Y H:i'),
+                        Carbon::parse($currentCustom)->format('d.m.Y'),
+                        Carbon::parse($originalDeadline)->format('d.m.Y')
+                    );
+
+                    if ($schedule->muddat_ozgarish_izoh) {
+                        $schedule->muddat_ozgarish_izoh .= "\n" . $changeLog;
+                    } else {
+                        $schedule->muddat_ozgarish_izoh = $changeLog;
+                    }
+                }
             }
 
             // Holatni qayta hisoblash

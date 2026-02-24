@@ -63,7 +63,7 @@ class DatasetSeeder extends Seeder
         // Read header row (may contain newline inside quoted field)
         // Skip lines until we find actual data (header ends when we see numeric first column)
         $header = fgetcsv($handle, 0, ';');
-        
+
         // Check if header was read correctly - first data row should start with number
         $testRow = fgetcsv($handle, 0, ';');
         if (!is_numeric(trim($testRow[0] ?? ''))) {
@@ -72,7 +72,7 @@ class DatasetSeeder extends Seeder
             $this->command->warn('Multi-line header detected, skipping...');
             $testRow = fgetcsv($handle, 0, ';');
         }
-        
+
         // Rewind and skip header properly, then process testRow first
         $firstDataRow = $testRow;
 
@@ -87,7 +87,7 @@ class DatasetSeeder extends Seeder
             try {
                 $data = $this->parseRow($firstDataRow);
                 $lot = $this->createLot($data, $rowNumber);
-                
+
                 if (empty($data['winner_name'])) {
                     $lot->update(['holat' => 'bosh']);
                     $imported++;
@@ -364,7 +364,7 @@ class DatasetSeeder extends Seeder
     {
         // Use lot number from CSV, or extract house number from address, or use row number
         $lotNumber = $data['lot_number'];
-        
+
         // Clean lot number - remove commas and extra characters
         $lotNumber = str_replace(',', '', $lotNumber);
         $lotNumber = preg_replace('/[^\d\-\/]/', '', $lotNumber);
@@ -504,8 +504,8 @@ class DatasetSeeder extends Seeder
                 // Past due - this is REAL debt
                 $holat = 'tolanmagan';
                 $kechikishKunlari = $oxirgiMuddat->diffInDays($bugun);
-                // Calculate penalty: 0.4% per day, max 50%
-                $penya = $payment['amount'] * 0.004 * $kechikishKunlari;
+                // Calculate penalty: 0.04% per day, max 50%
+                $penya = $payment['amount'] * 0.0004 * $kechikishKunlari;
                 $maxPenya = $payment['amount'] * 0.5;
                 $penya = min($penya, $maxPenya);
             } else {

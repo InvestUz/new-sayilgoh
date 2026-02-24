@@ -200,7 +200,7 @@ class ReapplyPayments extends Command
             // Only charge penalty if deadline passed BEFORE payment date
             if ($tolovSanasi->gt($oxirgiMuddat)) {
                 $kechikishKunlari = $oxirgiMuddat->diffInDays($tolovSanasi);
-                $penya = $schedule->qoldiq_summa * 0.004 * $kechikishKunlari;
+                $penya = $schedule->qoldiq_summa * 0.0004 * $kechikishKunlari;
                 $maxPenya = $schedule->qoldiq_summa * 0.5;
                 $schedule->penya_summasi = min($penya, $maxPenya);
                 $schedule->kechikish_kunlari = $kechikishKunlari;

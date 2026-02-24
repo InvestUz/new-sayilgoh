@@ -412,65 +412,82 @@ function formatLotSum($num) {
                             @foreach($period['schedules'] as $idx => $schedule)
                             @php
                                 $rowNum++;
-                                $muddatDate = \Carbon\Carbon::parse($schedule->oxirgi_muddat);
-                                $tolanganPenya = $schedule->tolangan_penya ?? 0;
+                                $originalDeadline = \Carbon\Carbon::parse($schedule->oxirgi_muddat);
+                                $bugun = \Carbon\Carbon::today();
 
-                                // Find the actual payment date for this schedule from payments table
+                                // CUSTOM DEADLINE: Use custom if set, otherwise original
+                                $effectiveDeadline = $schedule->custom_oxirgi_muddat
+                                    ? \Carbon\Carbon::parse($schedule->custom_oxirgi_muddat)
+                                    : $originalDeadline;
+
+                                // Calculate days: positive = future, negative = overdue
+                                $daysFromToday = $bugun->diffInDays($effectiveDeadline, false);
+                                $isOverdue = $daysFromToday < 0;
+                                $overdueDays = $isOverdue ? abs($daysFromToday) : 0;
+                                $daysLeft = $isOverdue ? 0 : $daysFromToday;
+
+                                $tolanganPenya = $schedule->tolangan_penya ?? 0;
                                 $lastPaymentDate = null;
 
-                                // Check if this schedule has been paid (partially or fully)
                                 if ($schedule->tolangan_summa > 0) {
-                                    // Find payments that could have paid this schedule
                                     foreach ($contract->payments->sortBy('tolov_sanasi') as $pmt) {
                                         $pmtDate = \Carbon\Carbon::parse($pmt->tolov_sanasi);
-                                        // Payment should be after the schedule start but relevant to this month
-                                        if ($pmtDate->gte($muddatDate->copy()->subDays(30))) {
+                                        if ($pmtDate->gte($originalDeadline->copy()->subDays(30))) {
                                             $lastPaymentDate = $pmtDate;
                                             break;
                                         }
                                     }
                                 }
 
-                                // Use stored penalty data from database (calculated at payment time)
-                                $kechikish = $schedule->kechikish_kunlari ?? 0;
-                                $penyaHisob = $schedule->penya_summasi ?? 0;
+                                // PENALTY CALCULATION based on effective deadline
+                                $kechikish = 0;
+                                $penyaHisob = 0;
 
-                                // If schedule still has debt and is overdue, recalculate penalty to today
-                                if ($schedule->qoldiq_summa > 0 && $bugun->gt($muddatDate)) {
-                                    // Days from deadline to today
-                                    $kechikish = $muddatDate->diffInDays($bugun);
-
-                                    // Penalty = remaining debt × 0.4% × days (max 50%)
-                                    $penyaRate = 0.004;
+                                if ($schedule->qoldiq_summa > 0 && $isOverdue) {
+                                    $kechikish = $overdueDays;
+                                    $penyaRate = 0.0004;
                                     $rawPenya = $schedule->qoldiq_summa * $penyaRate * $kechikish;
                                     $maxPenya = $schedule->qoldiq_summa * 0.5;
                                     $penyaHisob = min($rawPenya, $maxPenya);
                                 } elseif ($schedule->tolangan_summa > 0 && $tolanganPenya > 0) {
-                                    // If penalty was paid, show the historical data
-                                    // kechikish and penyaHisob are already set from database
-                                    // But recalculate kechikish if we have actual payment date
-                                    if ($lastPaymentDate && $lastPaymentDate->gt($muddatDate)) {
-                                        $kechikish = $muddatDate->diffInDays($lastPaymentDate);
-                                    }
+                                    $kechikish = $schedule->kechikish_kunlari ?? 0;
+                                    $penyaHisob = $schedule->penya_summasi ?? 0;
                                 }
 
                                 $qoldiqPenya = max(0, $penyaHisob - $tolanganPenya);
-
                                 $monthNames = ['', 'Yanvar', 'Fevral', 'Mart', 'Aprel', 'May', 'Iyun', 'Iyul', 'Avg', 'Sent', 'Okt', 'Noy', 'Dek'];
                                 $isCurrentMonth = ($schedule->oy == $currentMonth && $schedule->yil == $currentYear);
                                 $canDelete = $schedule->tolangan_summa <= 0;
-                                $isOverdue = $kechikish > 0;
+                                $hasCustomDeadline = !empty($schedule->custom_oxirgi_muddat);
                             @endphp
-                            <tr x-data="{ editing: false, form: { tolov_sanasi: '{{ \Carbon\Carbon::parse($schedule->tolov_sanasi)->format('Y-m-d') }}', oxirgi_muddat: '{{ $muddatDate->format('Y-m-d') }}', tolov_summasi: {{ $schedule->tolov_summasi }} } }"
+                            <tr x-data="{
+                                editing: false,
+                                form: {
+                                    tolov_sanasi: '{{ \Carbon\Carbon::parse($schedule->tolov_sanasi)->format('Y-m-d') }}',
+                                    oxirgi_muddat: '{{ $originalDeadline->format('Y-m-d') }}',
+                                    new_deadline: '{{ $effectiveDeadline->format('Y-m-d') }}',
+                                    tolov_summasi: {{ $schedule->tolov_summasi }}
+                                }
+                            }"
                                 class="{{ $isOverdue && $schedule->qoldiq_summa > 0 ? 'bg-red-900/10' : '' }} hover:bg-slate-700/30">
                                 <td class="border border-slate-600 px-2 py-1 text-center">{{ $rowNum }}</td>
                                 <td class="border border-slate-600 px-2 py-1">
                                     {{ $monthNames[$schedule->oy] ?? $schedule->oy }} {{ $schedule->yil }}
                                     @if($isCurrentMonth)<span class="text-[9px] text-blue-400">(joriy)</span>@endif
                                 </td>
+                                {{-- MUDDAT COLUMN: Shows effective deadline with edit option --}}
                                 <td class="border border-slate-600 px-2 py-1 text-center">
-                                    <template x-if="!editing"><span>{{ $muddatDate->format('d.m.Y') }}</span></template>
-                                    <template x-if="editing"><input type="date" x-model="form.oxirgi_muddat" class="w-full border border-slate-500 bg-slate-700 rounded px-1 py-0.5 text-xs text-white"></template>
+                                    <template x-if="!editing">
+                                        <div>
+                                            <span class="{{ $hasCustomDeadline ? 'text-blue-300' : '' }}">{{ $effectiveDeadline->format('d.m.Y') }}</span>
+                                            @if($hasCustomDeadline)
+                                                <span class="text-[8px] text-blue-400 ml-0.5" title="Asl muddat: {{ $originalDeadline->format('d.m.Y') }}">*</span>
+                                            @endif
+                                        </div>
+                                    </template>
+                                    <template x-if="editing">
+                                        <input type="date" x-model="form.new_deadline" class="w-full border border-slate-500 bg-slate-700 rounded px-1 py-0.5 text-xs text-white">
+                                    </template>
                                 </td>
                                 <td class="border border-slate-600 px-2 py-1 text-right text-white">
                                     <template x-if="!editing"><span>{{ number_format($schedule->tolov_summasi, 0, ',', ' ') }}</span></template>
@@ -479,8 +496,20 @@ function formatLotSum($num) {
                                 <td class="border border-slate-600 px-2 py-1 text-right {{ $schedule->tolangan_summa > 0 ? 'text-blue-400' : 'text-slate-500' }}">{{ $schedule->tolangan_summa > 0 ? number_format($schedule->tolangan_summa, 0, ',', ' ') : '—' }}</td>
                                 <td class="border border-slate-600 px-2 py-1 text-center text-slate-400">{{ $lastPaymentDate ? $lastPaymentDate->format('d.m.Y') : '—' }}</td>
                                 <td class="border border-slate-600 px-2 py-1 text-right {{ $schedule->qoldiq_summa > 0 ? 'text-red-400' : 'text-green-400' }}">{{ $schedule->qoldiq_summa > 0 ? number_format($schedule->qoldiq_summa, 0, ',', ' ') : '—' }}</td>
-                                <td class="border border-slate-600 px-2 py-1 text-center {{ $kechikish > 0 ? 'text-red-400' : 'text-slate-500' }}">{{ $kechikish > 0 ? $kechikish : '—' }}</td>
-                                <td class="border border-slate-600 px-2 py-1 text-center text-slate-400">{{ $kechikish > 0 ? '0,4%' : '—' }}</td>
+                                {{-- KUN COLUMN: Shows days overdue (red) or days left (green), not editable --}}
+                                <td class="border border-slate-600 px-2 py-1 text-center {{ $isOverdue ? 'text-red-400 font-semibold' : ($daysLeft > 0 ? 'text-green-400' : 'text-slate-400') }}"
+                                    title="{{ $schedule->muddat_ozgarish_izoh ? $schedule->muddat_ozgarish_izoh : '' }}">
+                                    @if($isOverdue)
+                                        {{ $overdueDays }}
+                                        @if($hasCustomDeadline)<span class="text-[8px] text-blue-400 ml-0.5">*</span>@endif
+                                    @elseif($daysLeft > 0)
+                                        {{ $daysLeft }}
+                                        @if($hasCustomDeadline)<span class="text-[8px] text-blue-400 ml-0.5">*</span>@endif
+                                    @else
+                                        —
+                                    @endif
+                                </td>
+                                <td class="border border-slate-600 px-2 py-1 text-center text-slate-400">{{ $isOverdue ? '0,04%' : '—' }}</td>
                                 <td class="border border-slate-600 px-2 py-1 text-right {{ $penyaHisob > 0 ? 'text-amber-400' : 'text-slate-500' }}">{{ $penyaHisob > 0 ? number_format($penyaHisob, 0, ',', ' ') : '—' }}</td>
                                 <td class="border border-slate-600 px-2 py-1 text-right {{ $tolanganPenya > 0 ? 'text-green-400' : 'text-slate-500' }}">{{ $tolanganPenya > 0 ? number_format($tolanganPenya, 0, ',', ' ') : '—' }}</td>
                                 <td class="border border-slate-600 px-2 py-1 text-right {{ $qoldiqPenya > 0 ? 'text-amber-400' : ($tolanganPenya > 0 ? 'text-green-400' : 'text-slate-500') }}">{{ $qoldiqPenya > 0 ? number_format($qoldiqPenya, 0, ',', ' ') : ($tolanganPenya > 0 ? '✓' : '—') }}</td>
@@ -508,6 +537,29 @@ function formatLotSum($num) {
         </div>
         @else
         <div class="px-4 py-8 text-center text-slate-500 text-sm">To'lov grafigi yo'q</div>
+        @endif
+
+        <!-- Deadline Change Log -->
+        @php
+            $schedulesWithChanges = collect($contractYearPeriods)->flatMap(fn($p) => $p['schedules'])->filter(fn($s) => !empty($s->muddat_ozgarish_izoh));
+        @endphp
+        @if($schedulesWithChanges->count() > 0)
+        <div class="mt-4 border-t border-slate-600 pt-3">
+            <div class="px-4 py-2 bg-blue-900/20 border border-blue-500/30 rounded-lg">
+                <h4 class="text-xs font-bold text-blue-300 mb-2 flex items-center gap-2">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    Muddat o'zgarishlari tarixi
+                </h4>
+                <div class="space-y-1.5 text-[10px] text-blue-200">
+                    @foreach($schedulesWithChanges as $schedule)
+                        <div class="bg-slate-800/50 rounded px-2 py-1.5 border-l-2 border-blue-400">
+                            <span class="font-medium text-blue-300">{{ $schedule->oy_nomi }} {{ $schedule->yil }}:</span>
+                            <div class="ml-2 mt-0.5 text-slate-300 whitespace-pre-line">{{ $schedule->muddat_ozgarish_izoh }}</div>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        </div>
         @endif
     </div>
 
@@ -874,6 +926,7 @@ function lotDetail() {
                     body: JSON.stringify({
                         tolov_sanasi: form.tolov_sanasi,
                         oxirgi_muddat: form.oxirgi_muddat,
+                        custom_oxirgi_muddat: form.new_deadline,
                         tolov_summasi: parseFloat(form.tolov_summasi)
                     })
                 });

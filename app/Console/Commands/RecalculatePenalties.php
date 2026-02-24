@@ -13,17 +13,17 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * Recalculate penalties for all contracts based on contract rules
- * 
+ *
  * Business Rules Applied:
  * 1. Penalty only if payment_date > due_date
- * 2. Formula: penalty = overdue_amount * 0.004 * overdue_days
+ * 2. Formula: penalty = overdue_amount * 0.0004 * overdue_days
  * 3. Cap: penalty <= overdue_amount * 0.5
  * 4. Each month calculated independently
  * 5. Remove any penalties not supported by overdue_days
  */
 class RecalculatePenalties extends Command
 {
-    protected $signature = 'penalties:recalculate 
+    protected $signature = 'penalties:recalculate
                             {--start= : Start date (Y-m-d) for recalculation range}
                             {--end= : End date (Y-m-d) for recalculation range}
                             {--contract= : Specific contract ID to recalculate}
@@ -57,11 +57,11 @@ class RecalculatePenalties extends Command
         }
 
         // Parse date range
-        $startDate = $this->option('start') 
-            ? Carbon::parse($this->option('start')) 
+        $startDate = $this->option('start')
+            ? Carbon::parse($this->option('start'))
             : Carbon::now()->subYears(5);
-        $endDate = $this->option('end') 
-            ? Carbon::parse($this->option('end')) 
+        $endDate = $this->option('end')
+            ? Carbon::parse($this->option('end'))
             : Carbon::today();
 
         $this->info("Date Range: {$startDate->format('Y-m-d')} to {$endDate->format('Y-m-d')}");
@@ -69,7 +69,7 @@ class RecalculatePenalties extends Command
 
         // Get contracts to process
         $contractsQuery = Contract::where('holat', 'faol');
-        
+
         if ($this->option('contract')) {
             $contractsQuery->where('id', $this->option('contract'));
         }
@@ -104,7 +104,7 @@ class RecalculatePenalties extends Command
         foreach ($contracts as $contract) {
             $contractReport = $this->recalculateContract($contract, $endDate, $isDryRun);
             $this->auditReport['contracts'][] = $contractReport;
-            
+
             // Update summary
             $this->auditReport['summary']['contracts_processed']++;
             $this->auditReport['summary']['schedules_processed'] += $contractReport['schedules_count'];
@@ -112,7 +112,7 @@ class RecalculatePenalties extends Command
             $this->auditReport['summary']['penalties_corrected'] += $contractReport['corrected'];
             $this->auditReport['summary']['total_previous_penalty'] += $contractReport['previous_total'];
             $this->auditReport['summary']['total_recalculated_penalty'] += $contractReport['new_total'];
-            
+
             $progressBar->advance();
         }
 
@@ -130,8 +130,8 @@ class RecalculatePenalties extends Command
         // Save audit report
         $this->saveAuditReport();
 
-        $this->auditReport['summary']['total_difference'] = 
-            $this->auditReport['summary']['total_recalculated_penalty'] - 
+        $this->auditReport['summary']['total_difference'] =
+            $this->auditReport['summary']['total_recalculated_penalty'] -
             $this->auditReport['summary']['total_previous_penalty'];
 
         // Log the recalculation
@@ -163,14 +163,14 @@ class RecalculatePenalties extends Command
         foreach ($schedules as $schedule) {
             $scheduleReport = $this->recalculateSchedule($schedule, $asOfDate, $isDryRun);
             $report['schedules'][] = $scheduleReport;
-            
+
             $report['previous_total'] += $scheduleReport['previous_penalty'];
             $report['new_total'] += $scheduleReport['new_penalty'];
-            
+
             if ($scheduleReport['is_invalid']) {
                 $report['invalid_penalties']++;
             }
-            
+
             if ($scheduleReport['was_corrected']) {
                 $report['corrected']++;
             }
@@ -196,7 +196,7 @@ class RecalculatePenalties extends Command
                 ->where('tolov_sanasi', '>=', $schedule->tolov_sanasi)
                 ->orderBy('tolov_sanasi')
                 ->first();
-            
+
             if ($payment) {
                 $effectiveDate = Carbon::parse($payment->tolov_sanasi);
             }
@@ -227,7 +227,7 @@ class RecalculatePenalties extends Command
         // Check if previous penalty was invalid
         $isInvalid = false;
         $wasOnTime = $effectiveDate->lte($dueDate);
-        
+
         if ($previousPenalty > 0 && $wasOnTime) {
             // Penalty charged but payment was on time - INVALID
             $isInvalid = true;
@@ -274,19 +274,19 @@ class RecalculatePenalties extends Command
         if ($isInvalid && $wasOnTime && $previousPenalty > 0) {
             return 'INVALID: Penalty charged but payment was on time';
         }
-        
+
         if ($isInvalid && $previousPenalty > 0) {
             return 'INVALID: Penalty without overdue days';
         }
-        
+
         if ($previousPenalty > $newPenalty) {
             return 'OVERSTATED: Previous penalty was too high';
         }
-        
+
         if ($previousPenalty < $newPenalty) {
             return 'UNDERSTATED: Previous penalty was too low';
         }
-        
+
         return 'OK: Penalty is correct';
     }
 
@@ -300,7 +300,7 @@ class RecalculatePenalties extends Command
         $this->info('===========================================');
         $this->info('SUMMARY');
         $this->info('===========================================');
-        
+
         $this->table(
             ['Metric', 'Value'],
             [
@@ -329,7 +329,7 @@ class RecalculatePenalties extends Command
             $this->newLine();
             $this->info("Contract #{$contract['contract_id']} - {$contract['contract_number']}");
             $this->info("Tenant: {$contract['tenant']}");
-            
+
             $rows = [];
             foreach ($contract['schedules'] as $schedule) {
                 if ($schedule['was_corrected'] || $schedule['is_invalid']) {
@@ -364,9 +364,9 @@ class RecalculatePenalties extends Command
     {
         $filename = 'penalty_recalculation_' . now()->format('Y-m-d_His') . '.json';
         $path = storage_path('logs/' . $filename);
-        
+
         file_put_contents($path, json_encode($this->auditReport, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
-        
+
         $this->newLine();
         $this->info("Audit report saved to: {$path}");
     }

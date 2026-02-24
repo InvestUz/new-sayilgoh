@@ -11,12 +11,12 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * Payment Observer - Automatically applies payments to schedules
- * 
+ *
  * Uses PenaltyCalculatorService for contract-compliant penalty calculation.
- * 
+ *
  * Business Rules Applied:
  * 1. Penalty only if payment_date > due_date
- * 2. Formula: penalty = overdue_amount * 0.004 * overdue_days
+ * 2. Formula: penalty = overdue_amount * 0.0004 * overdue_days
  * 3. Cap: penalty <= overdue_amount * 0.5
  * 4. Each month calculated independently
  * 5. Allocation order: penalty -> overdue rent -> current rent -> advance
@@ -55,10 +55,10 @@ class PaymentObserver
 
     /**
      * Apply payment to schedules using FIFO method with contract-compliant penalty calculation
-     * 
+     *
      * Contract Rules:
      * - Rule 1: Penalty only when payment_date > due_date
-     * - Rule 2: penalty = overdue_amount * 0.004 * overdue_days
+     * - Rule 2: penalty = overdue_amount * 0.0004 * overdue_days
      * - Rule 3: penalty <= overdue_amount * 0.5
      * - Rule 5: Each month calculated independently
      * - Rule 6: Allocation order: penalty -> rent -> advance
@@ -148,15 +148,15 @@ class PaymentObserver
         if ($paymentDate->gt($dueDate)) {
             // Rule 4: overdue_days = payment_date - due_date
             $overdueDays = $dueDate->diffInDays($paymentDate);
-            
-            // Rule 2: penalty = overdue_amount * 0.004 * overdue_days
+
+            // Rule 2: penalty = overdue_amount * 0.0004 * overdue_days
             $overdueAmount = (float) $schedule->qoldiq_summa;
             $calculatedPenalty = $overdueAmount * PaymentSchedule::PENYA_RATE * $overdueDays;
-            
+
             // Rule 3: penalty <= overdue_amount * 0.5
             $maxPenalty = $overdueAmount * PaymentSchedule::MAX_PENYA_RATE;
             $calculatedPenalty = min($calculatedPenalty, $maxPenalty);
-            
+
             // Update schedule with calculated penalty
             $schedule->penya_summasi = round($calculatedPenalty, 2);
             $schedule->kechikish_kunlari = $overdueDays;

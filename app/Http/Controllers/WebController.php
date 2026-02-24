@@ -60,7 +60,10 @@ class WebController extends Controller
             $contracts = $contracts->filter(fn($c) => $c->paymentSchedules->sum('qoldiq_summa') <= 0);
         } elseif ($status === 'muddati_otgan') {
             $contracts = $contracts->filter(function($c) use ($bugun) {
-                return $c->paymentSchedules->where('oxirgi_muddat', '<', $bugun)->where('qoldiq_summa', '>', 0)->count() > 0;
+                return $c->paymentSchedules->filter(function($s) use ($bugun) {
+                    $effectiveDeadline = $s->custom_oxirgi_muddat ?? $s->oxirgi_muddat;
+                    return Carbon::parse($effectiveDeadline)->lt($bugun) && $s->qoldiq_summa > 0;
+                })->count() > 0;
             });
         }
 
@@ -108,8 +111,9 @@ class WebController extends Controller
                 }
 
                 if ($schedule->qoldiq_summa > 0) {
-                    // Past due: oxirgi_muddat (deadline) has passed
-                    if (Carbon::parse($schedule->oxirgi_muddat)->lt($bugun)) {
+                    // Use effective deadline (custom if set, otherwise original)
+                    $effectiveDeadline = $schedule->custom_oxirgi_muddat ?? $schedule->oxirgi_muddat;
+                    if (Carbon::parse($effectiveDeadline)->lt($bugun)) {
                         $jamiMuddatiOtganQarz += $schedule->qoldiq_summa;
                     } else {
                         // Not yet due
@@ -138,12 +142,14 @@ class WebController extends Controller
                 $lotTolangan += $schedule->tolangan_summa;
 
                 if ($schedule->qoldiq_summa > 0) {
-                    $oxirgiMuddat = Carbon::parse($schedule->oxirgi_muddat);
+                    // Use effective deadline
+                    $effectiveDeadline = $schedule->custom_oxirgi_muddat ?? $schedule->oxirgi_muddat;
+                    $oxirgiMuddat = Carbon::parse($effectiveDeadline);
                     if ($oxirgiMuddat->lt($bugun)) {
                         $lotQarz += $schedule->qoldiq_summa;
                         $days = $oxirgiMuddat->diffInDays($bugun);
                         $lotKechikishKunlari = max($lotKechikishKunlari, $days);
-                        $penyaCalc = $schedule->qoldiq_summa * 0.004 * $days;
+                        $penyaCalc = $schedule->qoldiq_summa * 0.0004 * $days;
                         $maxPenya = $schedule->qoldiq_summa * 0.5;
                         $lotPenya += min($penyaCalc, $maxPenya);
                     } else {
@@ -175,7 +181,10 @@ class WebController extends Controller
             'jami_qoldiq' => $jamiMuddatiOtganQarz + $jamiMuddatiOtmaganQarz, // Total remaining
             'jami_penya' => max(0, $jamiPenya),
             'qarzdorlar_soni' => $contracts->filter(function($c) use ($bugun) {
-                return $c->paymentSchedules->where('oxirgi_muddat', '<', $bugun)->where('qoldiq_summa', '>', 0)->count() > 0;
+                return $c->paymentSchedules->filter(function($s) use ($bugun) {
+                    $effectiveDeadline = $s->custom_oxirgi_muddat ?? $s->oxirgi_muddat;
+                    return Carbon::parse($effectiveDeadline)->lt($bugun) && $s->qoldiq_summa > 0;
+                })->count() > 0;
             })->count(),
             'jami_lotlar' => $filteredLotIds->count(), // From filtered contracts
             'ijaradagi_lotlar' => $contracts->count(), // Contracts = active lots in this year
@@ -206,17 +215,24 @@ class WebController extends Controller
 
         // Filtered contracts list for display
         $filteredContracts = $contracts->map(function ($c) use ($bugun) {
-            // Only past-due debt counts as real debt
+            // Only past-due debt counts as real debt (using effective deadline)
             $c->qarz = $c->paymentSchedules
-                ->filter(fn($s) => Carbon::parse($s->oxirgi_muddat)->lt($bugun))
+                ->filter(function($s) use ($bugun) {
+                    $effectiveDeadline = $s->custom_oxirgi_muddat ?? $s->oxirgi_muddat;
+                    return Carbon::parse($effectiveDeadline)->lt($bugun);
+                })
                 ->sum('qoldiq_summa');
             $c->penya = $c->paymentSchedules->sum('penya_summasi') - $c->paymentSchedules->sum('tolangan_penya');
             $c->tolangan = $c->paymentSchedules->sum('tolangan_summa');
-            $overdueSchedules = $c->paymentSchedules->filter(fn($s) =>
-                Carbon::parse($s->oxirgi_muddat)->lt($bugun) && $s->qoldiq_summa > 0
-            );
+            $overdueSchedules = $c->paymentSchedules->filter(function($s) use ($bugun) {
+                $effectiveDeadline = $s->custom_oxirgi_muddat ?? $s->oxirgi_muddat;
+                return Carbon::parse($effectiveDeadline)->lt($bugun) && $s->qoldiq_summa > 0;
+            });
             $c->kechikish_kunlari = $overdueSchedules->count() > 0
-                ? $overdueSchedules->max(fn($s) => Carbon::parse($s->oxirgi_muddat)->diffInDays($bugun))
+                ? $overdueSchedules->max(function($s) use ($bugun) {
+                    $effectiveDeadline = $s->custom_oxirgi_muddat ?? $s->oxirgi_muddat;
+                    return Carbon::parse($effectiveDeadline)->diffInDays($bugun);
+                })
                 : 0;
             return $c;
         })->sortByDesc('qarz')->take(20)->values();
@@ -368,11 +384,11 @@ class WebController extends Controller
             $schedulesQuery->whereYear('tolov_sanasi', $year);
         }
 
-        // Apply status filter to payment schedules
+        // Apply status filter to payment schedules (using effective deadline)
         if ($status === 'muddati_otgan') {
-            $schedulesQuery->where('oxirgi_muddat', '<', $bugun)->where('qoldiq_summa', '>', 0);
+            $schedulesQuery->whereRaw('COALESCE(custom_oxirgi_muddat, oxirgi_muddat) < ?', [$bugun])->where('qoldiq_summa', '>', 0);
         } elseif ($status === 'kutilmoqda') {
-            $schedulesQuery->where('oxirgi_muddat', '>=', $bugun)->where('qoldiq_summa', '>', 0);
+            $schedulesQuery->whereRaw('COALESCE(custom_oxirgi_muddat, oxirgi_muddat) >= ?', [$bugun])->where('qoldiq_summa', '>', 0);
         } elseif ($status === 'tolangan') {
             $schedulesQuery->where('qoldiq_summa', '<=', 0);
         }
@@ -397,8 +413,8 @@ class WebController extends Controller
         $thisMonthSum = Payment::whereMonth('tolov_sanasi', $bugun->month)
             ->whereYear('tolov_sanasi', $bugun->year)->sum('summa');
 
-        // Overdue calculation (past due with remaining balance) - with year filter
-        $overdueQuery = \App\Models\PaymentSchedule::where('oxirgi_muddat', '<', $bugun)
+        // Overdue calculation (past due with remaining balance) - with year filter (using effective deadline)
+        $overdueQuery = \App\Models\PaymentSchedule::whereRaw('COALESCE(custom_oxirgi_muddat, oxirgi_muddat) < ?', [$bugun])
             ->where('qoldiq_summa', '>', 0);
         if ($year) {
             $overdueQuery->whereYear('tolov_sanasi', $year);
@@ -407,8 +423,8 @@ class WebController extends Controller
         $overdueDebt = $overdueSchedules->sum('qoldiq_summa');
         $overdueCount = $overdueSchedules->count();
 
-        // Not yet due calculation - with year filter
-        $notYetDueQuery = \App\Models\PaymentSchedule::where('oxirgi_muddat', '>=', $bugun)
+        // Not yet due calculation - with year filter (using effective deadline)
+        $notYetDueQuery = \App\Models\PaymentSchedule::whereRaw('COALESCE(custom_oxirgi_muddat, oxirgi_muddat) >= ?', [$bugun])
             ->where('qoldiq_summa', '>', 0);
         if ($year) {
             $notYetDueQuery->whereYear('tolov_sanasi', $year);
@@ -736,7 +752,7 @@ class WebController extends Controller
                             $qarz += $schedule->qoldiq_summa;
                             $days = $oxirgiMuddat->diffInDays($bugun);
                             $kechikishKunlari = max($kechikishKunlari, $days);
-                            $penyaCalc = $schedule->qoldiq_summa * 0.004 * $days;
+                            $penyaCalc = $schedule->qoldiq_summa * 0.0004 * $days;
                             $maxPenya = $schedule->qoldiq_summa * 0.5;
                             $penya += min($penyaCalc, $maxPenya);
                         } else {
@@ -1206,15 +1222,15 @@ class WebController extends Controller
         $totalDebt = \App\Models\PaymentSchedule::sum('qoldiq_summa');
         $totalPenya = \App\Models\PaymentSchedule::sum('penya_summasi');
 
-        // Overdue calculations
-        $overdueSchedules = \App\Models\PaymentSchedule::where('oxirgi_muddat', '<', $bugun)
+        // Overdue calculations (using effective deadline)
+        $overdueSchedules = \App\Models\PaymentSchedule::whereRaw('COALESCE(custom_oxirgi_muddat, oxirgi_muddat) < ?', [$bugun])
             ->where('qoldiq_summa', '>', 0)
             ->get();
         $overdueDebt = $overdueSchedules->sum('qoldiq_summa');
         $overdueCount = $overdueSchedules->count();
 
-        // Not yet due
-        $notYetDue = \App\Models\PaymentSchedule::where('oxirgi_muddat', '>=', $bugun)
+        // Not yet due (using effective deadline)
+        $notYetDue = \App\Models\PaymentSchedule::whereRaw('COALESCE(custom_oxirgi_muddat, oxirgi_muddat) >= ?', [$bugun])
             ->where('qoldiq_summa', '>', 0)
             ->get();
         $notYetDueDebt = $notYetDue->sum('qoldiq_summa');

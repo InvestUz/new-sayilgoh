@@ -11,7 +11,7 @@ use Carbon\Carbon;
 
 /**
  * To'lov Grafigi (Payment Schedule) modeli
- * 
+ *
  * Penalty calculation follows contract rules (Section 8.2):
  * - Rate: 0.4% per day on overdue amount
  * - Cap: 50% maximum of overdue amount
@@ -28,6 +28,8 @@ class PaymentSchedule extends Model
         'oy',
         'tolov_sanasi',
         'oxirgi_muddat',
+        'custom_oxirgi_muddat',
+        'muddat_ozgarish_izoh',
         'tolov_summasi',
         'tolangan_summa',
         'qoldiq_summa',
@@ -40,6 +42,7 @@ class PaymentSchedule extends Model
     protected $casts = [
         'tolov_sanasi' => 'date',
         'oxirgi_muddat' => 'date',
+        'custom_oxirgi_muddat' => 'date',
         'tolov_summasi' => 'decimal:2',
         'tolangan_summa' => 'decimal:2',
         'qoldiq_summa' => 'decimal:2',
@@ -48,9 +51,9 @@ class PaymentSchedule extends Model
     ];
 
     // Penalty constants (from contract section 8.2)
-    // Daily rate: 0.4% = 0.004
-    const PENYA_FOIZI = 0.4; // 0.4% per day (displayed as percentage)
-    const PENYA_RATE = 0.004; // 0.4% per day (decimal for calculation)
+    // Daily rate: 0.04% = 0.0004
+    const PENYA_FOIZI = 0.04; // 0.04% per day (displayed as percentage)
+    const PENYA_RATE = 0.0004; // 0.04% per day (decimal for calculation)
     const MAX_PENYA_FOIZI = 50; // Maximum 50% of debt
     const MAX_PENYA_RATE = 0.5; // Maximum 50% (decimal for calculation)
 
@@ -127,8 +130,12 @@ class PaymentSchedule extends Model
      */
     public function getMuddatiOtganAttribute(): bool
     {
-        return Carbon::parse($this->oxirgi_muddat)->isPast() &&
-               $this->holat !== 'tolangan';
+        // Use custom deadline if set, otherwise use original deadline
+        $effectiveDeadline = $this->custom_oxirgi_muddat
+            ? Carbon::parse($this->custom_oxirgi_muddat)
+            : Carbon::parse($this->oxirgi_muddat);
+
+        return $effectiveDeadline->isPast() && $this->holat !== 'tolangan';
     }
 
     /**
@@ -146,12 +153,12 @@ class PaymentSchedule extends Model
     /**
      * Calculate penalty as of current date
      * Uses PenaltyCalculatorService for contract-compliant calculation
-     * 
+     *
      * Contract Rules:
-     * - Rate: 0.4% per day
+     * - Rate: 0.04% per day
      * - Cap: 50% of overdue amount
      * - Only applies when current date > due date
-     * 
+     *
      * @param bool $save - Whether to persist the result
      * @return float Calculated penalty amount
      */
@@ -163,13 +170,13 @@ class PaymentSchedule extends Model
     /**
      * Calculate penalty at a specific date
      * This is the PRIMARY penalty calculation method
-     * 
+     *
      * Business Rules (Contract Section 8.2):
      * 1. If payment_date <= due_date → penalty = 0
-     * 2. penalty = overdue_amount * 0.004 * overdue_days
+     * 2. penalty = overdue_amount * 0.0004 * overdue_days
      * 3. penalty <= overdue_amount * 0.5 (cap)
      * 4. overdue_days = max(0, payment_date - due_date)
-     * 
+     *
      * @param Carbon $tolovSanasi - The date to calculate penalty as of
      * @param bool $save - Whether to persist the result
      * @return float Calculated penalty amount
@@ -181,13 +188,16 @@ class PaymentSchedule extends Model
             return (float) $this->penya_summasi;
         }
 
-        $oxirgiMuddat = Carbon::parse($this->oxirgi_muddat);
+        // Use custom deadline if set, otherwise use original deadline
+        $oxirgiMuddat = $this->custom_oxirgi_muddat
+            ? Carbon::parse($this->custom_oxirgi_muddat)
+            : Carbon::parse($this->oxirgi_muddat);
 
         // Rule 1: If payment_date <= due_date → penalty = 0
         if ($tolovSanasi->lte($oxirgiMuddat)) {
             $this->kechikish_kunlari = 0;
             $this->penya_summasi = 0;
-            
+
             if ($save) {
                 $this->save();
             }
@@ -198,7 +208,7 @@ class PaymentSchedule extends Model
         $kechikishKunlari = $oxirgiMuddat->diffInDays($tolovSanasi);
         $this->kechikish_kunlari = $kechikishKunlari;
 
-        // Rule 2: penalty = overdue_amount * 0.004 * overdue_days
+        // Rule 2: penalty = overdue_amount * 0.0004 * overdue_days
         $overdueAmount = (float) $this->qoldiq_summa;
         $penya = $overdueAmount * self::PENYA_RATE * $kechikishKunlari;
 
@@ -219,14 +229,18 @@ class PaymentSchedule extends Model
      * Get penalty details for display in monthly table
      * Rule 7: MUST always return overdue_days, penalty_rate, calculated_penalty
      * No NULL or empty values allowed
-     * 
+     *
      * @param Carbon|null $asOfDate
      * @return array
      */
     public function getPenaltyDetails(?Carbon $asOfDate = null): array
     {
         $asOfDate = $asOfDate ?? Carbon::today();
-        $oxirgiMuddat = Carbon::parse($this->oxirgi_muddat);
+
+        // Use custom deadline if set, otherwise use original deadline
+        $oxirgiMuddat = $this->custom_oxirgi_muddat
+            ? Carbon::parse($this->custom_oxirgi_muddat)
+            : Carbon::parse($this->oxirgi_muddat);
 
         // Calculate overdue days
         $overdueDays = 0;
@@ -253,14 +267,14 @@ class PaymentSchedule extends Model
 
     /**
      * Apply payment to this schedule
-     * 
+     *
      * Payment allocation order (Contract Rule 6):
      * a) penalty (ONLY if penalty > 0)
      * b) overdue rent
      * c) current rent
-     * 
+     *
      * Rule 8: If penalty = 0, skip penalty allocation step entirely
-     * 
+     *
      * @param float $amount Amount to apply
      * @param Carbon|null $paymentDate Date of payment (for penalty calculation)
      * @return array Result with penalty_tolangan, asosiy_tolangan, qoldiq
@@ -268,7 +282,7 @@ class PaymentSchedule extends Model
     public function applyPayment(float $amount, ?Carbon $paymentDate = null): array
     {
         $paymentDate = $paymentDate ?? Carbon::today();
-        
+
         $result = [
             'penya_tolangan' => 0,
             'asosiy_tolangan' => 0,
@@ -332,7 +346,7 @@ class PaymentSchedule extends Model
 
     public function scopeMuddatiOtgan($query)
     {
-        return $query->where('oxirgi_muddat', '<', now())
+        return $query->whereRaw('COALESCE(custom_oxirgi_muddat, oxirgi_muddat) < ?', [now()])
                      ->whereIn('holat', ['tolanmagan', 'qisman_tolangan']);
     }
 

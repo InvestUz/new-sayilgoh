@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Storage;
 
 /**
  * PenaltyNotificationService - Generate penalty notifications (Bildirg'inoma)
- * 
+ *
  * Contract clause 8.2 compliance:
  * - Penalty rate: 0.4% per day on overdue amount
  * - Penalty cap: 50% of overdue amount maximum
@@ -20,13 +20,13 @@ use Illuminate\Support\Facades\Storage;
 class PenaltyNotificationService
 {
     // Penalty constants (from contract)
-    public const PENALTY_RATE = 0.004; // 0.4% per day
+    public const PENALTY_RATE = 0.0004; // 0.04% per day
     public const MAX_PENALTY_RATE = 0.5; // 50% cap
     public const LEGAL_BASIS = "Shartnomaning 8.2-bandi asosida";
 
     /**
      * Calculate penalty using contract-compliant formula
-     * 
+     *
      * @param float $overdueAmount Amount that is overdue
      * @param Carbon $dueDate Due date (oxirgi muddat)
      * @param Carbon $paymentDate Payment date (or calculation date)
@@ -61,7 +61,7 @@ class PenaltyNotificationService
         $overdueDays = $dueDate->diffInDays($paymentDate);
         $result['overdue_days'] = $overdueDays;
 
-        // Rule 2: penalty = overdue_amount * 0.004 * overdue_days
+        // Rule 2: penalty = overdue_amount * 0.0004 * overdue_days
         $calculatedPenalty = $overdueAmount * self::PENALTY_RATE * $overdueDays;
         $result['calculated_penalty'] = round($calculatedPenalty, 2);
 
@@ -89,13 +89,13 @@ class PenaltyNotificationService
     {
         $formattedAmount = number_format($overdueAmount, 0, ',', ' ');
         $formattedPenalty = number_format($penalty, 0, ',', ' ');
-        
+
         $formula = "{$formattedAmount} × 0,4% × {$overdueDays} kun = {$formattedPenalty} UZS";
-        
+
         if ($capApplied) {
             $formula .= " (50% chegara qo'llandi)";
         }
-        
+
         return $formula;
     }
 
@@ -131,7 +131,7 @@ TEXT;
 
     /**
      * Create a penalty notification record
-     * 
+     *
      * @param Contract $contract
      * @param PaymentSchedule|null $schedule Specific schedule (optional)
      * @param Carbon|null $asOfDate Date to calculate as of (defaults to today)
@@ -143,7 +143,7 @@ TEXT;
         ?Carbon $asOfDate = null
     ): PenaltyNotification {
         $asOfDate = $asOfDate ?? Carbon::today();
-        
+
         // If no specific schedule, get the oldest unpaid one
         if (!$schedule) {
             $schedule = $contract->paymentSchedules()
@@ -209,7 +209,7 @@ TEXT;
 
     /**
      * Generate PDF for notification
-     * 
+     *
      * @param PenaltyNotification $notification
      * @return string PDF file path
      */
@@ -227,7 +227,7 @@ TEXT;
             $notification->notification_number,
             now()->format('Ymd_His')
         );
-        
+
         $path = 'notifications/' . $filename;
         Storage::disk('public')->put($path, $html);
 

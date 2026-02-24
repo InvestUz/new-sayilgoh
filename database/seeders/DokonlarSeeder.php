@@ -293,7 +293,7 @@ class DokonlarSeeder extends Seeder
             if ($oxirgiMuddat->lt($bugun)) {
                 $holat = 'tolanmagan';
                 $kechikishKunlari = $oxirgiMuddat->diffInDays($bugun);
-                $penya = $monthlyPayment * 0.004 * $kechikishKunlari;
+                $penya = $monthlyPayment * 0.0004 * $kechikishKunlari;
                 $maxPenya = $monthlyPayment * 0.5;
                 $penya = min($penya, $maxPenya);
             } else {

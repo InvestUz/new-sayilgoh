@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * PenaltyCalculatorService - Contract-compliant penalty (penya) calculation
- * 
+ *
  * Business Rules (from contract section 8.2):
  * 1. Penalty rate: 0.4% per day on overdue amount
  * 2. Penalty cap: 50% of overdue amount maximum
@@ -22,15 +22,15 @@ use Illuminate\Support\Facades\Log;
  */
 class PenaltyCalculatorService
 {
-    // Daily penalty rate (0.4% = 0.004)
-    public const PENALTY_RATE = 0.004;
-    
+    // Daily penalty rate (0.04% = 0.0004)
+    public const PENALTY_RATE = 0.0004;
+
     // Maximum penalty as percentage of overdue amount (50% = 0.5)
     public const MAX_PENALTY_RATE = 0.5;
 
     /**
      * Calculate penalty for a specific schedule at a given payment date
-     * 
+     *
      * @param PaymentSchedule $schedule The payment schedule
      * @param Carbon $paymentDate The date when payment was made
      * @return array ['overdue_days' => int, 'penalty_rate' => float, 'calculated_penalty' => float]
@@ -39,7 +39,7 @@ class PenaltyCalculatorService
     {
         $result = [
             'overdue_days' => 0,
-            'penalty_rate' => self::PENALTY_RATE * 100, // 0.4%
+            'penalty_rate' => self::PENALTY_RATE * 100, // 0.04%
             'calculated_penalty' => 0.0,
             'penalty_cap_applied' => false,
             'overdue_amount' => $schedule->qoldiq_summa,
@@ -56,7 +56,7 @@ class PenaltyCalculatorService
         $overdueDays = $dueDate->diffInDays($paymentDate);
         $result['overdue_days'] = $overdueDays;
 
-        // Rule 2: penalty = overdue_amount * 0.004 * overdue_days
+        // Rule 2: penalty = overdue_amount * 0.0004 * overdue_days
         $overdueAmount = (float) $schedule->qoldiq_summa;
         $calculatedPenalty = $overdueAmount * self::PENALTY_RATE * $overdueDays;
 
@@ -74,13 +74,13 @@ class PenaltyCalculatorService
 
     /**
      * Apply payment to contract schedules following FIFO and allocation rules
-     * 
+     *
      * Payment allocation order (Rule 6):
      * a) penalty (only if penalty > 0)
      * b) overdue rent
      * c) current rent
      * d) advance balance
-     * 
+     *
      * @param Payment $payment The payment to apply
      * @return array Detailed allocation report
      */
@@ -225,7 +225,7 @@ class PenaltyCalculatorService
     /**
      * Recalculate penalties for all schedules of a contract
      * Returns an audit report
-     * 
+     *
      * @param Contract $contract
      * @param Carbon|null $asOfDate Calculate as of this date (defaults to today)
      * @return array Audit report
@@ -263,8 +263,8 @@ class PenaltyCalculatorService
                     ->orderBy('tolov_sanasi')
                     ->first();
 
-                $paymentDate = $lastPayment 
-                    ? Carbon::parse($lastPayment->tolov_sanasi) 
+                $paymentDate = $lastPayment
+                    ? Carbon::parse($lastPayment->tolov_sanasi)
                     : $asOfDate;
             } else {
                 $paymentDate = $asOfDate;
@@ -306,7 +306,7 @@ class PenaltyCalculatorService
             $schedule->save();
         }
 
-        $report['totals']['difference'] = $report['totals']['recalculated_penalty'] - 
+        $report['totals']['difference'] = $report['totals']['recalculated_penalty'] -
                                           $report['totals']['previous_penalty'];
 
         return $report;
@@ -314,7 +314,7 @@ class PenaltyCalculatorService
 
     /**
      * Recalculate penalties for multiple contracts within a date range
-     * 
+     *
      * @param Carbon $startDate
      * @param Carbon $endDate
      * @return array Batch audit report
@@ -367,7 +367,7 @@ class PenaltyCalculatorService
     /**
      * Get penalty calculation details for display (monthly details table)
      * Rule 7: Monthly details MUST always show overdue_days, penalty_rate, calculated_penalty
-     * 
+     *
      * @param PaymentSchedule $schedule
      * @param Carbon|null $asOfDate
      * @return array
@@ -403,7 +403,7 @@ class PenaltyCalculatorService
 
     /**
      * Validate that a payment allocation is contract-compliant
-     * 
+     *
      * @param Payment $payment
      * @return array Validation result with any issues found
      */
@@ -434,7 +434,7 @@ class PenaltyCalculatorService
         if ($paymentDate->gt($dueDate)) {
             $expectedPenalty = $this->calculatePenaltyForSchedule($schedule, $paymentDate);
             $tolerance = 0.01; // Allow 1 cent tolerance for rounding
-            
+
             if (abs($payment->penya_uchun - $expectedPenalty['calculated_penalty']) > $tolerance) {
                 $issues[] = [
                     'type' => 'penalty_mismatch',
