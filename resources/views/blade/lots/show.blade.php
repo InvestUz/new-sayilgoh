@@ -593,10 +593,16 @@ function formatLotSum($num) {
 
                                 // Calculate overdue days based on payment timing
                                 if ($schedule->tolangan_summa > 0 && $lastPaymentDate) {
-                                    // Paid - check if deadline has passed (not current month)
+                                    // Paid (fully or partially) - check if deadline has passed (not current month)
                                     $isCurrentMonthSchedule = ($schedule->oy == $currentMonth && $schedule->yil == $currentYear);
-                                    if (!$isCurrentMonthSchedule && $lastPaymentDate->gt($paymentDue10th)) {
-                                        // Past month paid late - show days between 10th and payment date
+
+                                    // For partially paid schedules, still show overdue if qoldiq > 0
+                                    if ($schedule->qoldiq_summa > 0 && $bugun->gt($paymentDue10th)) {
+                                        // Partially paid and overdue
+                                        $overdueDays = $paymentDue10th->diffInDays($bugun);
+                                        $isOverdue = true;
+                                    } elseif (!$isCurrentMonthSchedule && $lastPaymentDate->gt($paymentDue10th) && $schedule->qoldiq_summa <= 0) {
+                                        // Fully paid past month that was late - show days between 10th and payment date
                                         $overdueDays = $paymentDue10th->diffInDays($lastPaymentDate);
                                         $isOverdue = true;
                                     } else {
@@ -604,11 +610,12 @@ function formatLotSum($num) {
                                         $isOverdue = false;
                                         $overdueDays = 0;
                                     }
-                                } elseif ($bugun->gt($paymentDue10th) && $schedule->qoldiq_summa > 0) {
-                                    // Unpaid and overdue - show days from 10th to today
+                                } elseif ($schedule->qoldiq_summa > 0 && $bugun->gt($paymentDue10th)) {
+                                    // Unpaid and overdue - ONLY if payment date has passed
                                     $overdueDays = $paymentDue10th->diffInDays($bugun);
                                     $isOverdue = true;
                                 } else {
+                                    // Future month or not yet due
                                     $isOverdue = false;
                                     $overdueDays = 0;
                                 }
@@ -784,10 +791,16 @@ function formatLotSum($num) {
 
                                 // Calculate overdue days based on payment timing
                                 if ($schedule->tolangan_summa > 0 && $lastPaymentDate) {
-                                    // Paid - check if deadline has passed (not current month)
+                                    // Paid (fully or partially) - check if deadline has passed (not current month)
                                     $isCurrentMonthSchedule = ($schedule->oy == $currentMonth && $schedule->yil == $currentYear);
-                                    if (!$isCurrentMonthSchedule && $lastPaymentDate->gt($paymentDue10th)) {
-                                        // Past month paid late - show days between 10th and payment date
+
+                                    // For partially paid schedules, still show overdue if qoldiq > 0
+                                    if ($schedule->qoldiq_summa > 0 && $bugun->gt($paymentDue10th)) {
+                                        // Partially paid and overdue
+                                        $overdueDays = $paymentDue10th->diffInDays($bugun);
+                                        $isOverdue = true;
+                                    } elseif (!$isCurrentMonthSchedule && $lastPaymentDate->gt($paymentDue10th) && $schedule->qoldiq_summa <= 0) {
+                                        // Fully paid past month that was late - show days between 10th and payment date
                                         $overdueDays = $paymentDue10th->diffInDays($lastPaymentDate);
                                         $isOverdue = true;
                                     } else {
@@ -795,11 +808,12 @@ function formatLotSum($num) {
                                         $isOverdue = false;
                                         $overdueDays = 0;
                                     }
-                                } elseif ($bugun->gt($paymentDue10th) && $schedule->qoldiq_summa > 0) {
-                                    // Unpaid and overdue - show days from 10th to today
+                                } elseif ($schedule->qoldiq_summa > 0 && $bugun->gt($paymentDue10th)) {
+                                    // Unpaid and overdue - ONLY if payment date has passed
                                     $overdueDays = $paymentDue10th->diffInDays($bugun);
                                     $isOverdue = true;
                                 } else {
+                                    // Future month or not yet due
                                     $isOverdue = false;
                                     $overdueDays = 0;
                                 }
