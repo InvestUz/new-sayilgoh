@@ -188,6 +188,12 @@ class PaymentSchedule extends Model
             return (float) $this->penya_summasi;
         }
 
+        // Rule: Expired contracts don't accumulate new penalties
+        $contract = $this->contract;
+        if ($contract && $contract->is_expired) {
+            return (float) $this->penya_summasi;
+        }
+
         // Use custom deadline if set, otherwise use original deadline
         $oxirgiMuddat = $this->custom_oxirgi_muddat
             ? Carbon::parse($this->custom_oxirgi_muddat)

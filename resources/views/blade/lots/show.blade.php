@@ -43,6 +43,9 @@ function formatLotSum($num) {
         @if($contract)
         <span class="text-sm text-gray-500">
             Shartnoma: <a href="{{ route('registry.contracts.show', $contract) }}" class="font-medium text-blue-600 hover:text-blue-800">{{ $contract->shartnoma_raqami }}</a> • {{ \Carbon\Carbon::parse($contract->boshlanish_sanasi)->format('d.m.Y') }} — {{ \Carbon\Carbon::parse($contract->tugash_sanasi)->format('d.m.Y') }}
+            @if($contract->is_expired)
+                <span class="ml-2 px-2 py-0.5 text-xs bg-gray-600 text-white rounded">MUDDATI TUGAGAN</span>
+            @endif
         </span>
         @endif
     </div>
@@ -206,6 +209,9 @@ function formatLotSum($num) {
         $currentQuarter = ceil($currentMonth / 3);
         $contractStart = \Carbon\Carbon::parse($contract->boshlanish_sanasi);
         $contractEnd = \Carbon\Carbon::parse($contract->tugash_sanasi);
+
+        // Check if contract is expired (tugash_sanasi < today)
+        $isContractExpired = $contractEnd->lt($bugun);
 
         // Get all schedules sorted by date
         $allSchedules = $contract->paymentSchedules->sortBy('tolov_sanasi');
@@ -440,10 +446,15 @@ function formatLotSum($num) {
                                 }
 
                                 // PENALTY CALCULATION based on effective deadline
+                                // EXPIRED CONTRACT RULE: Don't calculate penalty for expired contracts
                                 $kechikish = 0;
                                 $penyaHisob = 0;
 
-                                if ($schedule->qoldiq_summa > 0 && $isOverdue) {
+                                if ($isContractExpired) {
+                                    // Contract expired - no penalty calculation
+                                    $kechikish = 0;
+                                    $penyaHisob = 0;
+                                } elseif ($schedule->qoldiq_summa > 0 && $isOverdue) {
                                     $kechikish = $overdueDays;
                                     $penyaRate = 0.0004;
                                     $rawPenya = $schedule->qoldiq_summa * $penyaRate * $kechikish;
@@ -972,6 +983,7 @@ function lotDetail() {
 }
 
 // Schedule Generator Component
+@if($contract)
 function scheduleGenerator() {
     // Default: next year period from contract start date
     const contractStart = '{{ $contract->boshlanish_sanasi ?? date("Y-m-d") }}';
@@ -1074,5 +1086,5 @@ function scheduleGenerator() {
         }
     }
 }
-</script>
+@endif</script>
 @endsection

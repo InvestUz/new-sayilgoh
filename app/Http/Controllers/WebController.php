@@ -26,8 +26,10 @@ class WebController extends Controller
         $bugun = Carbon::today();
 
         // Base query for contracts - APPLY YEAR FILTER only if specified
+        // EXCLUDE expired contracts (tugash_sanasi < today)
         $contractsQuery = Contract::with(['paymentSchedules', 'tenant', 'lot'])
-            ->where('holat', 'faol');
+            ->where('holat', 'faol')
+            ->where('tugash_sanasi', '>=', Carbon::today());
 
         // Only filter by year if explicitly set
         if ($year) {
@@ -193,10 +195,12 @@ class WebController extends Controller
             'umumiy_maydon' => $umumiyMaydon, // Total area in m²
             // Counts for card links
             'muddati_otgan_count' => $muddatiOtganCount,
+            'muddati_otgan_soni' => $muddatiOtganCount, // For home.blade.php compatibility
             'penya_count' => $penyaCount,
             'tolangan_count' => $tolanganCount,
             'kutilmoqda_count' => $kutilmoqdaCount,
             'qarzdor_count' => $qarzdorCount,
+            'tolovlar_soni' => Payment::where('holat', 'tasdiqlangan')->count(), // Total approved payments
         ];
 
         // Years list
@@ -564,8 +568,9 @@ class WebController extends Controller
         $tenants = $tenantsQuery->latest()->paginate(20, ['*'], 'tenants_page')->withQueryString();
 
         // Lots
+        $lotStatus = $request->get('lot_status', '');
         $lotsQuery = Lot::with(['contracts' => function($q) {
-            $q->where('holat', 'faol')->with(['tenant', 'paymentSchedules']);
+            $q->with(['tenant', 'paymentSchedules']);
         }]);
         if ($search) {
             $lotsQuery->where(function ($q) use ($search) {
@@ -574,6 +579,22 @@ class WebController extends Controller
                   ->orWhere('tuman', 'like', "%{$search}%");
             });
         }
+
+        // Apply lot status filter
+        if ($lotStatus === 'muddati_tugagan') {
+            // Filter lots with expired contracts
+            $lotsQuery->whereHas('contracts', function($q) {
+                $q->where('tugash_sanasi', '<', Carbon::today());
+            });
+        } elseif ($lotStatus === 'bosh') {
+            $lotsQuery->where('holat', 'bosh');
+        } elseif ($lotStatus === 'ijarada') {
+            $lotsQuery->where('holat', 'ijarada')
+                      ->whereHas('contracts', function($q) {
+                          $q->where('tugash_sanasi', '>=', Carbon::today());
+                      });
+        }
+
         $lots = $lotsQuery->latest()->paginate(20, ['*'], 'lots_page')->withQueryString();
 
         // Payments
@@ -584,7 +605,24 @@ class WebController extends Controller
                   ->orWhereHas('contract.tenant', fn($tq) => $tq->where('name', 'like', "%{$search}%"));
             });
         }
-        $payments = $paymentsQuery->latest('tolov_sanasi')->paginate(20, ['*'], 'payments_page')->withQueryString();
+        $payments = $paymentsQuery->latest('tolov_sanasi')->paginate(20, ['*'], 'payments_page');
+
+        // Unified contracts dataset for merged registry table
+        $contractsQuery = Contract::with(['tenant', 'lot', 'paymentSchedules', 'payments']);
+        if ($search) {
+            $contractsQuery->where(function ($q) use ($search) {
+                $q->where('shartnoma_raqami', 'like', "%{$search}%")
+                  ->orWhereHas('tenant', function ($tq) use ($search) {
+                      $tq->where('name', 'like', "%{$search}%")
+                         ->orWhere('inn', 'like', "%{$search}%");
+                  })
+                  ->orWhereHas('lot', function ($lq) use ($search) {
+                      $lq->where('lot_raqami', 'like', "%{$search}%")
+                         ->orWhere('obyekt_nomi', 'like', "%{$search}%");
+                  });
+            });
+        }
+        $contracts = $contractsQuery->latest('shartnoma_sanasi')->paginate(50, ['*'], 'contracts_page');
 
         // Counts for badges
         $counts = [
@@ -593,7 +631,7 @@ class WebController extends Controller
             'payments' => Payment::count(),
         ];
 
-        return view('registry', compact('tenants', 'lots', 'payments', 'tab', 'search', 'counts'));
+        return view('registry', compact('tenants', 'lots', 'payments', 'contracts', 'tab', 'search', 'counts'));
     }
 
     // ==================== TENANTS ====================

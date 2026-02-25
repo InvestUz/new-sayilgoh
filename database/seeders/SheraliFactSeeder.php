@@ -87,9 +87,9 @@ class SheraliFactSeeder extends Seeder
     {
         $this->command->info('Building lookup caches...');
 
-        // Cache lots by various formats
+        // Cache lots by various formats (use ALL contracts, including expired)
         $lots = Lot::with(['contracts' => function ($q) {
-            $q->where('holat', 'faol')->with('tenant');
+            $q->with('tenant');
         }])->get();
 
         foreach ($lots as $lot) {
@@ -108,9 +108,8 @@ class SheraliFactSeeder extends Seeder
             $this->lotCache[strtoupper($lot->lot_raqami)] = $lot;
         }
 
-        // Cache contracts by shartnoma_raqami
-        $contracts = Contract::where('holat', 'faol')
-            ->with(['lot', 'tenant'])
+        // Cache contracts by shartnoma_raqami (ALL contracts, not only faol)
+        $contracts = Contract::with(['lot', 'tenant'])
             ->get();
 
         foreach ($contracts as $contract) {
@@ -437,6 +436,13 @@ class SheraliFactSeeder extends Seeder
 
             if (preg_match('/INN[:\s\-]*PINFL[:\s]*(\d+)/i', $purpose, $matches)) {
                 $inn = $matches[1];
+            }
+
+            // REAL-DATA RULE: If we cannot identify tenant at all, do NOT auto-create fake records
+            if ($tenantName === 'Unknown Tenant' && !$inn) {
+                $this->command->warn("Skipping auto-creation for LOT {$lotNum} because tenant is unknown");
+                DB::rollBack();
+                return null;
             }
 
             $this->command->warn("Auto-creating missing LOT/Contract: {$lotNum} for {$tenantName}");

@@ -176,6 +176,25 @@ class Contract extends Model
     }
 
     /**
+     * Check if contract has expired (tugash_sanasi < today)
+     */
+    public function getIsExpiredAttribute(): bool
+    {
+        if (!$this->tugash_sanasi) {
+            return false;
+        }
+        return Carbon::parse($this->tugash_sanasi)->lt(Carbon::today());
+    }
+
+    /**
+     * Check if contract is active (not expired and status is faol)
+     */
+    public function getIsActiveAttribute(): bool
+    {
+        return $this->holat === 'faol' && !$this->is_expired;
+    }
+
+    /**
      * Dalolatnoma holati nomi (O'zbekcha)
      */
     public function getDalolatnomaHolatiNomiAttribute(): string

@@ -113,6 +113,18 @@ class DokonlarSeeder extends Seeder
         $lotNumber = trim($row[4] ?? '');
         $lotNumber = preg_replace('/[^\d]/', '', $lotNumber);
 
+        // CSV columns:
+        // 0: № (row number)
+        // 1: Дўкон номерлари (shop number)
+        // 2: Ауксион ғолиби (winner name)
+        // 3: ИНН (INN)
+        // 4: ЛОТ рақами (lot number)
+        // 5: Шартнома тузилган сана (contract date)
+        // 6: Шартноманинг амал қилиш муддати (contract END date)
+        // 7: Шартнома номери № (contract number)
+        // 8: Шартнома суммаси (contract amount)
+        // 9: Телефон номерлари (phone)
+
         return [
             'row_number' => trim($row[0] ?? ''),
             'shop_number' => trim($row[1] ?? ''),
@@ -120,9 +132,10 @@ class DokonlarSeeder extends Seeder
             'inn' => $this->parseInn($row[3] ?? ''),
             'lot_number' => $lotNumber,
             'contract_date' => $this->parseDate($row[5] ?? ''),
-            'contract_number' => trim($row[6] ?? ''),
-            'contract_amount' => $this->parseNumber($row[7] ?? ''),
-            'phone' => $this->normalizePhone($row[8] ?? ''),
+            'contract_end_date' => $this->parseDate($row[6] ?? ''),
+            'contract_number' => trim($row[7] ?? ''),
+            'contract_amount' => $this->parseNumber($row[8] ?? ''),
+            'phone' => $this->normalizePhone($row[9] ?? ''),
         ];
     }
 
@@ -236,11 +249,15 @@ class DokonlarSeeder extends Seeder
             throw new \Exception("Contract amount is required and must be greater than 0");
         }
 
-        $duration = 12;
-        $monthlyPayment = $contractAmount / $duration;
-
+        // Use actual end date from CSV if available, otherwise calculate
         $startDate = Carbon::parse($contractDate);
-        $endDate = $startDate->copy()->addMonths($duration);
+        $endDate = $data['contract_end_date'] ?: $startDate->copy()->addMonths(12);
+
+        // Calculate duration in months from actual dates
+        $duration = $startDate->diffInMonths($endDate);
+        if ($duration < 1) $duration = 12; // Minimum 12 months
+
+        $monthlyPayment = $contractAmount / $duration;
 
         $contractNumber = $data['contract_number'];
         if (empty($contractNumber) || !is_numeric($contractNumber)) {
@@ -255,6 +272,15 @@ class DokonlarSeeder extends Seeder
             $counter++;
         }
 
+        // Check if contract is expired (end date < today)
+        $bugun = Carbon::today();
+        $isExpired = Carbon::parse($endDate)->lt($bugun);
+        $status = $isExpired ? 'tugagan' : 'faol';
+
+        if ($isExpired) {
+            $this->command->warn("Contract {$contractNumber} is EXPIRED (end date: " . Carbon::parse($endDate)->format('d.m.Y') . ")");
+        }
+
         return Contract::create([
             'lot_id' => $lotId,
             'tenant_id' => $tenantId,
@@ -267,7 +293,7 @@ class DokonlarSeeder extends Seeder
             'boshlanish_sanasi' => $startDate,
             'tugash_sanasi' => $endDate,
             'birinchi_tolov_sanasi' => $startDate->copy()->addDays(10),
-            'holat' => 'faol',
+            'holat' => $status,
             'dalolatnoma_holati' => 'topshirilgan',
         ]);
     }
@@ -276,10 +302,14 @@ class DokonlarSeeder extends Seeder
     {
         $monthlyPayment = $contract->oylik_tolovi;
         $startDate = Carbon::parse($contract->boshlanish_sanasi);
+        $duration = $contract->shartnoma_muddati;
+
+        // Check if contract is expired
+        $isContractExpired = $contract->holat === 'tugagan';
 
         $schedules = [];
 
-        for ($i = 0; $i < 12; $i++) {
+        for ($i = 0; $i < $duration; $i++) {
             $paymentDate = $startDate->copy()->addMonths($i);
 
             $tolovSanasi = Carbon::create(
@@ -290,7 +320,13 @@ class DokonlarSeeder extends Seeder
 
             $oxirgiMuddat = $tolovSanasi->copy()->addDays(10);
 
-            if ($oxirgiMuddat->lt($bugun)) {
+            // EXPIRED CONTRACT RULE: Don't calculate penalty for expired contracts
+            if ($isContractExpired) {
+                // All schedules for expired contracts are marked as 'tolanmagan' with NO penalty
+                $holat = 'tolanmagan';
+                $kechikishKunlari = 0;
+                $penya = 0;
+            } elseif ($oxirgiMuddat->lt($bugun)) {
                 $holat = 'tolanmagan';
                 $kechikishKunlari = $oxirgiMuddat->diffInDays($bugun);
                 $penya = $monthlyPayment * 0.0004 * $kechikishKunlari;

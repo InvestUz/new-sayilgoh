@@ -93,6 +93,10 @@
             margin-bottom: 6px; padding-bottom: 4px;
             border-bottom: 1px solid rgba(56, 189, 248, 0.08);
         }
+        .panel-sub {
+            font-size: 9px; color: #64748b;
+            margin-top: -4px; margin-bottom: 6px;
+        }
 
         /* Top Stats Row */
         .stats-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
@@ -424,25 +428,26 @@
                     <!-- Finance Grid -->
                     <div class="panel">
                         <div class="panel-title">Moliyaviy ko'rsatkichlar</div>
+                        <div class="panel-sub">Summalar mln so'mda ko'rsatilgan</div>
                         <div class="finance-grid">
                             <div class="finance-card green">
                                 <div class="finance-label">Jami To'langan</div>
-                                <div class="finance-val green">{{ number_format($totalPaid / 1000000, 1) }} <span>mln</span></div>
+                                <div class="finance-val green" title="{{ number_format($totalPaid, 0, '', ' ') }} so'm">{{ number_format($totalPaid / 1000000, 1) }} <span>mln so'm</span></div>
                                 <div class="finance-sub">{{ $paidPercent }}% bajarildi</div>
                             </div>
                             <div class="finance-card red">
                                 <div class="finance-label">Muddati O'tgan</div>
-                                <div class="finance-val red">{{ number_format($overdueDebt / 1000000, 1) }} <span>mln</span></div>
+                                <div class="finance-val red" title="{{ number_format($overdueDebt, 0, '', ' ') }} so'm">{{ number_format($overdueDebt / 1000000, 1) }} <span>mln so'm</span></div>
                                 <div class="finance-sub">{{ $overdueCount }} ta grafik</div>
                             </div>
                             <div class="finance-card amber">
                                 <div class="finance-label">Muddati O'tmagan</div>
-                                <div class="finance-val amber">{{ number_format($notYetDueDebt / 1000000, 1) }} <span>mln</span></div>
+                                <div class="finance-val amber" title="{{ number_format($notYetDueDebt, 0, '', ' ') }} so'm">{{ number_format($notYetDueDebt / 1000000, 1) }} <span>mln so'm</span></div>
                                 <div class="finance-sub">{{ $notYetDueCount }} ta grafik</div>
                             </div>
                             <div class="finance-card orange">
                                 <div class="finance-label">Jami Penya</div>
-                                <div class="finance-val orange">{{ number_format($totalPenya / 1000000, 1) }} <span>mln</span></div>
+                                <div class="finance-val orange" title="{{ number_format($totalPenya, 0, '', ' ') }} so'm">{{ number_format($totalPenya / 1000000, 1) }} <span>mln so'm</span></div>
                                 <div class="finance-sub">Kechikish jarimasi</div>
                             </div>
                         </div>
