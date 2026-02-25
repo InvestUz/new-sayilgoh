@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Contract;
+use App\Services\ContractPeriodService;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -27,6 +28,16 @@ class ContractPageController extends Controller
         // Reload to get updated penalty values
         $contract->load('paymentSchedules');
 
+        // Use ContractPeriodService for period calculations
+        $periodService = ContractPeriodService::forContract($contract);
+        $contractYearPeriods = $periodService->getAllPeriods();
+        $currentPeriodNum = $periodService->getCurrentPeriodNum();
+        $grandTotals = $periodService->getGrandTotals();
+        $isContractExpired = $periodService->isContractExpired();
+        $currentMonthYear = $periodService->getCurrentMonthYear();
+        $currentMonth = $currentMonthYear['month'];
+        $currentYear = $currentMonthYear['year'];
+
         // Calculate statistics with dynamic penalty calculation
         $totalPenya = $contract->paymentSchedules->sum(function($schedule) {
             return $schedule->getPenaltyDetails()['calculated_penalty'];
@@ -39,7 +50,16 @@ class ContractPageController extends Controller
             'penya' => $totalPenya,
         ];
 
-        return view('contracts.show', compact('contract', 'stats'));
+        return view('contracts.show', compact(
+            'contract',
+            'stats',
+            'contractYearPeriods',
+            'currentPeriodNum',
+            'grandTotals',
+            'isContractExpired',
+            'currentMonth',
+            'currentYear'
+        ));
     }
 
     public function create(): View

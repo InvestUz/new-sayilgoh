@@ -52,6 +52,9 @@ Route::prefix('contracts')->group(function () {
     Route::get('/{contract}', [ContractController::class, 'show']);
     Route::put('/{contract}', [ContractController::class, 'update']);
     Route::get('/{contract}/payment-schedule', [ContractController::class, 'paymentSchedule']);
+
+    // Period filtering: current by default, all on demand
+    Route::get('/{contract}/periods', [ContractController::class, 'getPeriods']);
 });
 
 // ============================================

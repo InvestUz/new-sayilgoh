@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Contract;
 use App\Models\Lot;
 use App\Models\PaymentSchedule;
+use App\Services\ContractPeriodService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\Rule;
@@ -301,6 +302,67 @@ class ContractController extends Controller
                     'yig_ilish_foizi' => 0,
                 ]
             ]);
+        }
+    }
+
+    /**
+     * Get contract periods (current period by default, all on demand)
+     *
+     * Use cases:
+     * - Dashboard: Show only current period summary
+     * - Analytics: Filter by specific period
+     * - Monitoring: Default view with option to expand
+     *
+     * Query params:
+     * - period: 'current' (default) | 'all' | period_number (1,2,3...)
+     * - format: 'summary' (default) | 'detailed'
+     */
+    public function getPeriods(Request $request, Contract $contract): JsonResponse
+    {
+        try {
+            $periodType = $request->get('period', 'current');
+            $format = $request->get('format', 'summary');
+
+            $periodService = ContractPeriodService::forContract($contract);
+
+            // Get data based on period type
+            $data = match($periodType) {
+                'all' => [
+                    'periods' => $periodService->getAllPeriods(),
+                    'grand_totals' => $periodService->getGrandTotals(),
+                ],
+                'current' => [
+                    'current_period' => $periodService->getCurrentPeriod(),
+                    'current_period_num' => $periodService->getCurrentPeriodNum(),
+                ],
+                default => [
+                    'period' => collect($periodService->getAllPeriods())
+                        ->firstWhere('num', (int)$periodType),
+                ],
+            };
+
+            // Add common metadata
+            $data['meta'] = [
+                'contract_id' => $contract->id,
+                'contract_number' => $contract->shartnoma_raqami,
+                'is_expired' => $periodService->isContractExpired(),
+                'current_month_year' => $periodService->getCurrentMonthYear(),
+            ];
+
+            // For detailed format, include full service data
+            if ($format === 'detailed') {
+                $data['full_data'] = $periodService->toArray();
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => $data
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
         }
     }
 }

@@ -249,8 +249,24 @@ function formatLotSum($num) {
                     $periodTotal = $periodSchedules->sum('tolov_summasi');
                     $periodPaid = $periodSchedules->sum('tolangan_summa');
                     $periodDebt = $periodSchedules->sum('qoldiq_summa');
-                    $periodPenya = $periodSchedules->sum('penya_summasi') - $periodSchedules->sum('tolangan_penya');
-                    $periodOverdue = $periodSchedules->filter(fn($s) => $s->qoldiq_summa > 0 && \Carbon\Carbon::parse($s->oxirgi_muddat)->lt($bugun))->sum('qoldiq_summa');
+
+                    // IMPORTANT: Use effective deadline (custom or original) for overdue/penalty
+                    $periodPenalty = 0;
+                    if (!$isContractExpired) {
+                        $periodPenalty = $periodSchedules->sum(function($s) {
+                            return ($s->penya_summasi ?? 0) - ($s->tolangan_penya ?? 0);
+                        });
+                    }
+                    $periodPenya = max(0, $periodPenalty);
+
+                    $periodOverdue = $periodSchedules->filter(function($s) use ($bugun) {
+                        if ($s->qoldiq_summa <= 0) return false;
+                        $effectiveDeadline = $s->custom_oxirgi_muddat
+                            ? \Carbon\Carbon::parse($s->custom_oxirgi_muddat)
+                            : \Carbon\Carbon::parse($s->oxirgi_muddat);
+                        return $effectiveDeadline->lt($bugun);
+                    })->sum('qoldiq_summa');
+
                     $periodPercent = $periodTotal > 0 ? round(($periodPaid / $periodTotal) * 100, 1) : 0;
 
                     // Adjust period end to actual last schedule in this period
@@ -266,7 +282,7 @@ function formatLotSum($num) {
                         'paid' => $periodPaid,
                         'debt' => $periodDebt,
                         'overdue' => $periodOverdue,
-                        'penya' => max(0, $periodPenya),
+                        'penya' => $periodPenya,
                         'percent' => $periodPercent,
                     ];
                     $periodNum++;
@@ -285,25 +301,59 @@ function formatLotSum($num) {
         $grandPaid = $approvedPayments->sum('summa') - abs($refundPayments->sum('summa')); // Real paid minus refunds
 
         $grandDebt = max(0, $grandTotal - $grandPaid);
-        $grandPenya = max(0, $allSchedules->sum('penya_summasi') - $allSchedules->sum('tolangan_penya'));
-        $grandOverdue = $allSchedules->filter(fn($s) => $s->qoldiq_summa > 0 && \Carbon\Carbon::parse($s->oxirgi_muddat)->lt($bugun))->sum('qoldiq_summa');
+
+        // Grand penalty: Don't accrue penalty after contract expiry
+        $grandPenaltyRaw = 0;
+        if (!$isContractExpired) {
+            $grandPenaltyRaw = $allSchedules->sum('penya_summasi') - $allSchedules->sum('tolangan_penya');
+        }
+        $grandPenya = max(0, $grandPenaltyRaw);
+
+        $grandOverdue = $allSchedules->filter(function($s) use ($bugun) {
+            if ($s->qoldiq_summa <= 0) return false;
+            $effectiveDeadline = $s->custom_oxirgi_muddat
+                ? \Carbon\Carbon::parse($s->custom_oxirgi_muddat)
+                : \Carbon\Carbon::parse($s->oxirgi_muddat);
+            return $effectiveDeadline->lt($bugun);
+        })->sum('qoldiq_summa');
+
         $grandPercent = $grandTotal > 0 ? round(($grandPaid / $grandTotal) * 100, 1) : 0;
 
         // Find current period
         $currentPeriodNum = null;
+        $currentPeriodData = null;
         foreach ($contractYearPeriods as $idx => $p) {
             if ($bugun->gte($p['start']) && $bugun->lte($p['end'])) {
                 $currentPeriodNum = $p['num'];
+                $currentPeriodData = $p;
                 break;
             }
         }
+
+        // If no current period found, use first period
+        if (!$currentPeriodData && count($contractYearPeriods) > 0) {
+            $currentPeriodData = $contractYearPeriods[0];
+        }
+
+        // STATS: Use current period data for top cards
+        $stats = $currentPeriodData ? [
+            'jami_summa' => $currentPeriodData['total'],
+            'tolangan' => $currentPeriodData['paid'],
+            'qoldiq' => $currentPeriodData['debt'],
+            'penya' => $currentPeriodData['penya'],
+        ] : [
+            'jami_summa' => 0,
+            'tolangan' => 0,
+            'qoldiq' => 0,
+            'penya' => 0,
+        ];
     @endphp
 
     <!-- Professional Government Dashboard Table -->
     <div class="bg-slate-800/50 backdrop-blur border border-slate-700/50 rounded-xl mb-6 overflow-hidden">
         <!-- Header -->
         <div class="px-4 py-3 bg-slate-800/80 border-b border-slate-700/50 flex justify-between items-center">
-            <h3 class="font-bold text-white text-sm uppercase tracking-wide">To'lov jadvali</h3>
+            <h3 class="font-bold text-white text-sm uppercase tracking-wide">To'lov jadvali (Joriy davr)</h3>
             <div class="flex items-center gap-2">
                 <button @click="showAddScheduleModal = true" class="px-3 py-1.5 border border-slate-600 text-slate-300 text-xs hover:bg-slate-700 rounded">+ Grafik</button>
                 <button @click="showPaymentModal = true" class="px-3 py-1.5 bg-blue-600 text-white text-xs hover:bg-blue-700 rounded">+ To'lov</button>
@@ -311,6 +361,26 @@ function formatLotSum($num) {
         </div>
 
         @if(count($contractYearPeriods) > 0)
+        @php
+            // Find current period for default display
+            $currentPeriod = null;
+            $otherPeriods = [];
+            foreach ($contractYearPeriods as $period) {
+                if ($period['num'] === $currentPeriodNum) {
+                    $currentPeriod = $period;
+                } else {
+                    $otherPeriods[] = $period;
+                }
+            }
+            // If no current period (e.g., contract not started yet), use first period
+            if (!$currentPeriod && count($contractYearPeriods) > 0) {
+                $currentPeriod = $contractYearPeriods[0];
+                $otherPeriods = array_slice($contractYearPeriods, 1);
+            }
+        @endphp
+
+        @if($currentPeriod)
+        <!-- Current Period Table -->
         <div class="overflow-x-auto">
             <table class="w-full text-xs">
                 <thead class="bg-slate-700/50 text-slate-300">
@@ -335,43 +405,27 @@ function formatLotSum($num) {
                     </tr>
                 </thead>
                 <tbody class="text-slate-200">
-                    <tr class="bg-slate-700/30 font-bold">
-                        <td class="border border-slate-600 px-2 py-1 text-center"></td>
-                        <td class="border border-slate-600 px-2 py-1 text-white">JAMI:</td>
-                        <td class="border border-slate-600 px-2 py-1 text-center text-blue-400">{{ $allSchedules->count() }}</td>
-                        <td class="border border-slate-600 px-2 py-1 text-right text-white">{{ number_format($grandTotal, 0, ',', ' ') }}</td>
-                        <td class="border border-slate-600 px-2 py-1 text-right text-slate-400">{{ $allSchedules->count() > 0 ? number_format($grandTotal / $allSchedules->count(), 0, ',', ' ') : 0 }}</td>
-                        <td class="border border-slate-600 px-2 py-1 text-right text-blue-400">{{ number_format($grandPaid, 0, ',', ' ') }}</td>
-                        <td class="border border-slate-600 px-2 py-1 text-right text-blue-400">{{ $allSchedules->where('tolangan_summa', '>', 0)->count() > 0 ? number_format($grandPaid / $allSchedules->where('tolangan_summa', '>', 0)->count(), 0, ',', ' ') : 0 }}</td>
-                        <td class="border border-slate-600 px-2 py-1 text-right text-red-400">{{ number_format($grandDebt, 0, ',', ' ') }}</td>
-                        <td class="border border-slate-600 px-2 py-1 text-right text-red-400">{{ number_format($grandOverdue, 0, ',', ' ') }}</td>
-                        <td class="border border-slate-600 px-2 py-1 text-center {{ $grandPercent >= 100 ? 'text-green-400' : ($grandPercent >= 50 ? 'text-blue-400' : 'text-red-400') }}">{{ $grandPercent }}%</td>
-                        <td class="border border-slate-600 px-2 py-1 text-right text-amber-400">{{ number_format($grandPenya, 0, ',', ' ') }}</td>
-                        <td class="border border-slate-600 px-2 py-1"></td>
-                    </tr>
-                    @foreach($contractYearPeriods as $period)
                     @php
-                        $isCurrentPeriod = $period['num'] === $currentPeriodNum;
-                        $periodScheduleIds = $period['schedules']->pluck('id')->toArray();
-                        $canDeletePeriod = $period['paid'] <= 0;
+                        $periodScheduleIds = $currentPeriod['schedules']->pluck('id')->toArray();
+                        $canDeletePeriod = $currentPeriod['paid'] <= 0;
                     @endphp
-                    <tr class="hover:bg-slate-700/30 {{ $isCurrentPeriod ? 'bg-blue-900/20' : '' }}">
-                        <td class="border border-slate-600 px-2 py-1 text-center {{ $isCurrentPeriod ? 'text-blue-400 font-bold' : '' }}">{{ $period['num'] }}</td>
+                    <tr class="hover:bg-slate-700/30 bg-blue-900/20">
+                        <td class="border border-slate-600 px-2 py-1 text-center text-blue-400 font-bold">{{ $currentPeriod['num'] }}</td>
                         <td class="border border-slate-600 px-2 py-1">
-                            @if($isCurrentPeriod)<span class="px-1 bg-blue-600 text-white text-[9px] rounded mr-1">JORIY</span>@endif
-                            <span class="text-white">{{ $period['start']->format('d.m.Y') }}</span>
+                            <span class="px-1 bg-blue-600 text-white text-[9px] rounded mr-1">JORIY</span>
+                            <span class="text-white">{{ $currentPeriod['start']->format('d.m.Y') }}</span>
                             <span class="text-slate-500">—</span>
-                            <span class="text-white">{{ $period['end']->format('d.m.Y') }}</span>
+                            <span class="text-white">{{ $currentPeriod['end']->format('d.m.Y') }}</span>
                         </td>
-                        <td class="border border-slate-600 px-2 py-1 text-center">{{ $period['months'] }}</td>
-                        <td class="border border-slate-600 px-2 py-1 text-right text-white">{{ number_format($period['total'], 0, ',', ' ') }}</td>
-                        <td class="border border-slate-600 px-2 py-1 text-right text-slate-400">{{ $period['months'] > 0 ? number_format($period['total'] / $period['months'], 0, ',', ' ') : 0 }}</td>
-                        <td class="border border-slate-600 px-2 py-1 text-right {{ $period['paid'] > 0 ? 'text-blue-400' : 'text-slate-500' }}">{{ number_format($period['paid'], 0, ',', ' ') }}</td>
-                        <td class="border border-slate-600 px-2 py-1 text-right text-slate-400">{{ $period['schedules']->where('tolangan_summa', '>', 0)->count() > 0 ? number_format($period['paid'] / $period['schedules']->where('tolangan_summa', '>', 0)->count(), 0, ',', ' ') : '—' }}</td>
-                        <td class="border border-slate-600 px-2 py-1 text-right {{ $period['debt'] > 0 ? 'text-red-400' : 'text-green-400' }}">{{ number_format($period['debt'], 0, ',', ' ') }}</td>
-                        <td class="border border-slate-600 px-2 py-1 text-right {{ $period['overdue'] > 0 ? 'text-red-400' : 'text-slate-500' }}">{{ $period['overdue'] > 0 ? number_format($period['overdue'], 0, ',', ' ') : '—' }}</td>
-                        <td class="border border-slate-600 px-2 py-1 text-center {{ $period['percent'] >= 100 ? 'text-green-400' : ($period['percent'] >= 50 ? 'text-blue-400' : 'text-red-400') }}">{{ $period['percent'] }}%</td>
-                        <td class="border border-slate-600 px-2 py-1 text-right {{ $period['penya'] > 0 ? 'text-amber-400' : 'text-slate-500' }}">{{ $period['penya'] > 0 ? number_format($period['penya'], 0, ',', ' ') : '—' }}</td>
+                        <td class="border border-slate-600 px-2 py-1 text-center">{{ $currentPeriod['months'] }}</td>
+                        <td class="border border-slate-600 px-2 py-1 text-right text-white">{{ number_format($currentPeriod['total'], 0, ',', ' ') }}</td>
+                        <td class="border border-slate-600 px-2 py-1 text-right text-slate-400">{{ $currentPeriod['months'] > 0 ? number_format($currentPeriod['total'] / $currentPeriod['months'], 0, ',', ' ') : 0 }}</td>
+                        <td class="border border-slate-600 px-2 py-1 text-right {{ $currentPeriod['paid'] > 0 ? 'text-blue-400' : 'text-slate-500' }}">{{ number_format($currentPeriod['paid'], 0, ',', ' ') }}</td>
+                        <td class="border border-slate-600 px-2 py-1 text-right text-slate-400">{{ $currentPeriod['schedules']->where('tolangan_summa', '>', 0)->count() > 0 ? number_format($currentPeriod['paid'] / $currentPeriod['schedules']->where('tolangan_summa', '>', 0)->count(), 0, ',', ' ') : '—' }}</td>
+                        <td class="border border-slate-600 px-2 py-1 text-right {{ $currentPeriod['debt'] > 0 ? 'text-red-400' : 'text-green-400' }}">{{ number_format($currentPeriod['debt'], 0, ',', ' ') }}</td>
+                        <td class="border border-slate-600 px-2 py-1 text-right {{ $currentPeriod['overdue'] > 0 ? 'text-red-400' : 'text-slate-500' }}">{{ $currentPeriod['overdue'] > 0 ? number_format($currentPeriod['overdue'], 0, ',', ' ') : '—' }}</td>
+                        <td class="border border-slate-600 px-2 py-1 text-center {{ $currentPeriod['percent'] >= 100 ? 'text-green-400' : ($currentPeriod['percent'] >= 50 ? 'text-blue-400' : 'text-red-400') }}">{{ $currentPeriod['percent'] }}%</td>
+                        <td class="border border-slate-600 px-2 py-1 text-right {{ $currentPeriod['penya'] > 0 ? 'text-amber-400' : 'text-slate-500' }}">{{ $currentPeriod['penya'] > 0 ? number_format($currentPeriod['penya'], 0, ',', ' ') : '—' }}</td>
                         <td class="border border-slate-600 px-2 py-1 text-center">
                             @if($canDeletePeriod)
                             <button @click="deletePeriodSchedules([{{ implode(',', $periodScheduleIds) }}])" class="text-slate-500 hover:text-red-400">
@@ -382,18 +436,278 @@ function formatLotSum($num) {
                             @endif
                         </td>
                     </tr>
-                    @endforeach
                 </tbody>
             </table>
         </div>
+        @endif
+
+        <!-- Other Periods (Collapsible) -->
+        @if(count($otherPeriods) > 0 || $grandTotal > 0)
+        <div x-data="{ showAllPeriods: false }" class="border-t border-slate-600">
+            <button @click="showAllPeriods = !showAllPeriods" class="w-full px-4 py-2 text-left text-xs text-slate-400 hover:bg-slate-700/30 flex items-center justify-between">
+                <span class="font-medium">Barcha davrlar va umumiy statistika</span>
+                <svg :class="showAllPeriods ? 'rotate-180' : ''" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </button>
+            <div x-show="showAllPeriods" x-collapse>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-xs">
+                        <thead class="bg-slate-700/50 text-slate-300">
+                            <tr>
+                                <th rowspan="2" class="border border-slate-600 px-2 py-1 text-left">№</th>
+                                <th rowspan="2" class="border border-slate-600 px-2 py-1 text-left">Shartnoma davri</th>
+                                <th rowspan="2" class="border border-slate-600 px-2 py-1 text-center">Oylar</th>
+                                <th colspan="2" class="border border-slate-600 px-2 py-1 text-center">Reja</th>
+                                <th colspan="2" class="border border-slate-600 px-2 py-1 text-center text-blue-400">Fakt</th>
+                                <th colspan="2" class="border border-slate-600 px-2 py-1 text-center text-red-400">Qoldiq</th>
+                                <th rowspan="2" class="border border-slate-600 px-2 py-1 text-center">%</th>
+                                <th rowspan="2" class="border border-slate-600 px-2 py-1 text-center text-amber-400">Penya</th>
+                                <th rowspan="2" class="border border-slate-600 px-2 py-1 text-center">Amal</th>
+                            </tr>
+                            <tr class="text-[10px] text-slate-400">
+                                <th class="border border-slate-600 px-2 py-1 text-right">summa</th>
+                                <th class="border border-slate-600 px-2 py-1 text-right">oylik</th>
+                                <th class="border border-slate-600 px-2 py-1 text-right text-blue-400">tushgan</th>
+                                <th class="border border-slate-600 px-2 py-1 text-right text-blue-400">oylik</th>
+                                <th class="border border-slate-600 px-2 py-1 text-right text-red-400">jami</th>
+                                <th class="border border-slate-600 px-2 py-1 text-right text-red-400">o'tgan</th>
+                            </tr>
+                        </thead>
+                        <tbody class="text-slate-200">
+                            <!-- JAMI Row -->
+                            <tr class="bg-slate-700/30 font-bold">
+                                <td class="border border-slate-600 px-2 py-1 text-center"></td>
+                                <td class="border border-slate-600 px-2 py-1 text-white">JAMI:</td>
+                                <td class="border border-slate-600 px-2 py-1 text-center text-blue-400">{{ $allSchedules->count() }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-right text-white">{{ number_format($grandTotal, 0, ',', ' ') }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-right text-slate-400">{{ $allSchedules->count() > 0 ? number_format($grandTotal / $allSchedules->count(), 0, ',', ' ') : 0 }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-right text-blue-400">{{ number_format($grandPaid, 0, ',', ' ') }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-right text-blue-400">{{ $allSchedules->where('tolangan_summa', '>', 0)->count() > 0 ? number_format($grandPaid / $allSchedules->where('tolangan_summa', '>', 0)->count(), 0, ',', ' ') : 0 }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-right text-red-400">{{ number_format($grandDebt, 0, ',', ' ') }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-right text-red-400">{{ number_format($grandOverdue, 0, ',', ' ') }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-center {{ $grandPercent >= 100 ? 'text-green-400' : ($grandPercent >= 50 ? 'text-blue-400' : 'text-red-400') }}">{{ $grandPercent }}%</td>
+                                <td class="border border-slate-600 px-2 py-1 text-right text-amber-400">{{ number_format($grandPenya, 0, ',', ' ') }}</td>
+                                <td class="border border-slate-600 px-2 py-1"></td>
+                            </tr>
+                            @foreach($contractYearPeriods as $period)
+                            @php
+                                $isCurrentPeriod = $period['num'] === $currentPeriodNum;
+                                $periodScheduleIds = $period['schedules']->pluck('id')->toArray();
+                                $canDeletePeriod = $period['paid'] <= 0;
+                            @endphp
+                            <tr class="hover:bg-slate-700/30 {{ $isCurrentPeriod ? 'bg-blue-900/20' : '' }}">
+                                <td class="border border-slate-600 px-2 py-1 text-center {{ $isCurrentPeriod ? 'text-blue-400 font-bold' : '' }}">{{ $period['num'] }}</td>
+                                <td class="border border-slate-600 px-2 py-1">
+                                    @if($isCurrentPeriod)<span class="px-1 bg-blue-600 text-white text-[9px] rounded mr-1">JORIY</span>@endif
+                                    <span class="text-white">{{ $period['start']->format('d.m.Y') }}</span>
+                                    <span class="text-slate-500">—</span>
+                                    <span class="text-white">{{ $period['end']->format('d.m.Y') }}</span>
+                                </td>
+                                <td class="border border-slate-600 px-2 py-1 text-center">{{ $period['months'] }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-right text-white">{{ number_format($period['total'], 0, ',', ' ') }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-right text-slate-400">{{ $period['months'] > 0 ? number_format($period['total'] / $period['months'], 0, ',', ' ') : 0 }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-right {{ $period['paid'] > 0 ? 'text-blue-400' : 'text-slate-500' }}">{{ number_format($period['paid'], 0, ',', ' ') }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-right text-slate-400">{{ $period['schedules']->where('tolangan_summa', '>', 0)->count() > 0 ? number_format($period['paid'] / $period['schedules']->where('tolangan_summa', '>', 0)->count(), 0, ',', ' ') : '—' }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-right {{ $period['debt'] > 0 ? 'text-red-400' : 'text-green-400' }}">{{ number_format($period['debt'], 0, ',', ' ') }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-right {{ $period['overdue'] > 0 ? 'text-red-400' : 'text-slate-500' }}">{{ $period['overdue'] > 0 ? number_format($period['overdue'], 0, ',', ' ') : '—' }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-center {{ $period['percent'] >= 100 ? 'text-green-400' : ($period['percent'] >= 50 ? 'text-blue-400' : 'text-red-400') }}">{{ $period['percent'] }}%</td>
+                                <td class="border border-slate-600 px-2 py-1 text-right {{ $period['penya'] > 0 ? 'text-amber-400' : 'text-slate-500' }}">{{ $period['penya'] > 0 ? number_format($period['penya'], 0, ',', ' ') : '—' }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-center">
+                                    @if($canDeletePeriod)
+                                    <button @click="deletePeriodSchedules([{{ implode(',', $periodScheduleIds) }}])" class="text-slate-500 hover:text-red-400">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                    </button>
+                                    @else
+                                    <span class="text-slate-600"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg></span>
+                                    @endif
+                                </td>
+                            </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        @endif
 
         <!-- Monthly Details (Expandable) -->
         <div x-data="{ showDetails: false }" class="border-t border-slate-600">
             <button @click="showDetails = !showDetails" class="w-full px-4 py-2 text-left text-xs text-slate-400 hover:bg-slate-700/30 flex items-center justify-between">
-                <span class="font-medium">Oylik tafsilotlar</span>
+                <div class="flex items-center gap-3">
+                    <span class="font-medium">Oylik tafsilotlar (Joriy davr)</span>
+                    @if($currentPeriod)
+                    <span class="text-[10px] px-2 py-0.5 bg-blue-900/30 text-blue-300 rounded">{{ $currentPeriod['schedules']->count() }} oy</span>
+                    @endif
+                </div>
                 <svg :class="showDetails ? 'rotate-180' : ''" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
             </button>
             <div x-show="showDetails" x-collapse>
+                <table class="w-full text-xs">
+                    <thead class="bg-slate-700/50 text-slate-300">
+                        <tr>
+                            <th class="border border-slate-600 px-2 py-1 text-center">№</th>
+                            <th class="border border-slate-600 px-2 py-1 text-left">Oy</th>
+                            <th class="border border-slate-600 px-2 py-1 text-center">Muddat</th>
+                            <th class="border border-slate-600 px-2 py-1 text-right">Grafik</th>
+                            <th class="border border-slate-600 px-2 py-1 text-right">To'langan</th>
+                            <th class="border border-slate-600 px-2 py-1 text-center">To'lov sanasi</th>
+                            <th class="border border-slate-600 px-2 py-1 text-right">Qoldiq</th>
+                            <th class="border border-slate-600 px-2 py-1 text-center">Kun</th>
+                            <th class="border border-slate-600 px-2 py-1 text-center">Stavka</th>
+                            <th class="border border-slate-600 px-2 py-1 text-right">Penya hisob</th>
+                            <th class="border border-slate-600 px-2 py-1 text-right">To'l. penya</th>
+                            <th class="border border-slate-600 px-2 py-1 text-right">Qol. penya</th>
+                            <th class="border border-slate-600 px-2 py-1 text-center">Amal</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-slate-200">
+                        @php $rowNum = 0; @endphp
+                        @if($currentPeriod)
+                            @foreach($currentPeriod['schedules'] as $idx => $schedule)
+                            @php
+                                $rowNum++;
+                                $originalDeadline = \Carbon\Carbon::parse($schedule->oxirgi_muddat);
+                                $bugun = \Carbon\Carbon::today();
+
+                                // CUSTOM DEADLINE: Use custom if set, otherwise original
+                                $effectiveDeadline = $schedule->custom_oxirgi_muddat
+                                    ? \Carbon\Carbon::parse($schedule->custom_oxirgi_muddat)
+                                    : $originalDeadline;
+
+                                // Calculate days: positive = future, negative = overdue
+                                $daysFromToday = $bugun->diffInDays($effectiveDeadline, false);
+                                $isOverdue = $daysFromToday < 0;
+                                $overdueDays = $isOverdue ? abs($daysFromToday) : 0;
+                                $daysLeft = $isOverdue ? 0 : $daysFromToday;
+
+                                $tolanganPenya = $schedule->tolangan_penya ?? 0;
+                                $lastPaymentDate = null;
+
+                                if ($schedule->tolangan_summa > 0) {
+                                    foreach ($contract->payments->sortBy('tolov_sanasi') as $pmt) {
+                                        $pmtDate = \Carbon\Carbon::parse($pmt->tolov_sanasi);
+                                        if ($pmtDate->gte($originalDeadline->copy()->subDays(30))) {
+                                            $lastPaymentDate = $pmtDate;
+                                            break;
+                                        }
+                                    }
+                                }
+
+                                // PENALTY CALCULATION based on effective deadline
+                                // EXPIRED CONTRACT RULE: Don't calculate penalty for expired contracts
+                                $kechikish = 0;
+                                $penyaHisob = 0;
+
+                                if ($isContractExpired) {
+                                    // Contract expired - no penalty calculation
+                                    $kechikish = 0;
+                                    $penyaHisob = 0;
+                                } elseif ($schedule->qoldiq_summa > 0 && $isOverdue) {
+                                    $kechikish = $overdueDays;
+                                    $penyaRate = 0.0004;
+                                    $rawPenya = $schedule->qoldiq_summa * $penyaRate * $kechikish;
+                                    $maxPenya = $schedule->qoldiq_summa * 0.5;
+                                    $penyaHisob = min($rawPenya, $maxPenya);
+                                } elseif ($schedule->tolangan_summa > 0 && $tolanganPenya > 0) {
+                                    $kechikish = $schedule->kechikish_kunlari ?? 0;
+                                    $penyaHisob = $schedule->penya_summasi ?? 0;
+                                }
+
+                                $qoldiqPenya = max(0, $penyaHisob - $tolanganPenya);
+                                $monthNames = ['', 'Yanvar', 'Fevral', 'Mart', 'Aprel', 'May', 'Iyun', 'Iyul', 'Avg', 'Sent', 'Okt', 'Noy', 'Dek'];
+                                $isCurrentMonth = ($schedule->oy == $currentMonth && $schedule->yil == $currentYear);
+                                $canDelete = $schedule->tolangan_summa <= 0;
+                                $hasCustomDeadline = !empty($schedule->custom_oxirgi_muddat);
+                            @endphp
+                            <tr x-data="{
+                                editing: false,
+                                form: {
+                                    tolov_sanasi: '{{ \Carbon\Carbon::parse($schedule->tolov_sanasi)->format('Y-m-d') }}',
+                                    oxirgi_muddat: '{{ $originalDeadline->format('Y-m-d') }}',
+                                    new_deadline: '{{ $effectiveDeadline->format('Y-m-d') }}',
+                                    tolov_summasi: {{ $schedule->tolov_summasi }}
+                                }
+                            }"
+                                class="{{ $isOverdue && $schedule->qoldiq_summa > 0 ? 'bg-red-900/10' : '' }} hover:bg-slate-700/30">
+                                <td class="border border-slate-600 px-2 py-1 text-center">{{ $rowNum }}</td>
+                                <td class="border border-slate-600 px-2 py-1">
+                                    {{ $monthNames[$schedule->oy] ?? $schedule->oy }} {{ $schedule->yil }}
+                                    @if($isCurrentMonth)<span class="text-[9px] text-blue-400">(joriy)</span>@endif
+                                </td>
+                                {{-- MUDDAT COLUMN: Shows effective deadline with edit option --}}
+                                <td class="border border-slate-600 px-2 py-1 text-center">
+                                    <template x-if="!editing">
+                                        <div>
+                                            <span class="{{ $hasCustomDeadline ? 'text-blue-300' : '' }}">{{ $effectiveDeadline->format('d.m.Y') }}</span>
+                                            @if($hasCustomDeadline)
+                                                <span class="text-[8px] text-blue-400 ml-0.5" title="Asl muddat: {{ $originalDeadline->format('d.m.Y') }}">*</span>
+                                            @endif
+                                        </div>
+                                    </template>
+                                    <template x-if="editing">
+                                        <input type="date" x-model="form.new_deadline" class="w-full border border-slate-500 bg-slate-700 rounded px-1 py-0.5 text-xs text-white">
+                                    </template>
+                                </td>
+                                <td class="border border-slate-600 px-2 py-1 text-right text-white">
+                                    <template x-if="!editing"><span>{{ number_format($schedule->tolov_summasi, 0, ',', ' ') }}</span></template>
+                                    <template x-if="editing"><input type="number" x-model="form.tolov_summasi" class="w-full border border-slate-500 bg-slate-700 rounded px-1 py-0.5 text-xs text-right text-white"></template>
+                                </td>
+                                <td class="border border-slate-600 px-2 py-1 text-right {{ $schedule->tolangan_summa > 0 ? 'text-blue-400' : 'text-slate-500' }}">{{ $schedule->tolangan_summa > 0 ? number_format($schedule->tolangan_summa, 0, ',', ' ') : '—' }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-center text-slate-400">{{ $lastPaymentDate ? $lastPaymentDate->format('d.m.Y') : '—' }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-right {{ $schedule->qoldiq_summa > 0 ? 'text-red-400' : 'text-green-400' }}">{{ $schedule->qoldiq_summa > 0 ? number_format($schedule->qoldiq_summa, 0, ',', ' ') : '—' }}</td>
+                                {{-- KUN COLUMN: Shows days overdue (red) or days left (green), not editable --}}
+                                <td class="border border-slate-600 px-2 py-1 text-center {{ $isOverdue ? 'text-red-400 font-semibold' : ($daysLeft > 0 ? 'text-green-400' : 'text-slate-400') }}"
+                                    title="{{ $schedule->muddat_ozgarish_izoh ? $schedule->muddat_ozgarish_izoh : '' }}">
+                                    @if($isOverdue)
+                                        {{ $overdueDays }}
+                                        @if($hasCustomDeadline)<span class="text-[8px] text-blue-400 ml-0.5">*</span>@endif
+                                    @elseif($daysLeft > 0)
+                                        {{ $daysLeft }}
+                                        @if($hasCustomDeadline)<span class="text-[8px] text-blue-400 ml-0.5">*</span>@endif
+                                    @else
+                                        —
+                                    @endif
+                                </td>
+                                <td class="border border-slate-600 px-2 py-1 text-center text-slate-400">{{ $isOverdue ? '0,04%' : '—' }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-right {{ $penyaHisob > 0 ? 'text-amber-400' : 'text-slate-500' }}">{{ $penyaHisob > 0 ? number_format($penyaHisob, 0, ',', ' ') : '—' }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-right {{ $tolanganPenya > 0 ? 'text-green-400' : 'text-slate-500' }}">{{ $tolanganPenya > 0 ? number_format($tolanganPenya, 0, ',', ' ') : '—' }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-right {{ $qoldiqPenya > 0 ? 'text-amber-400' : ($tolanganPenya > 0 ? 'text-green-400' : 'text-slate-500') }}">{{ $qoldiqPenya > 0 ? number_format($qoldiqPenya, 0, ',', ' ') : ($tolanganPenya > 0 ? '✓' : '—') }}</td>
+                                <td class="border border-slate-600 px-1 py-1 text-center">
+                                    <template x-if="!editing">
+                                        <div class="flex items-center justify-center gap-1">
+                                            <button @click="editing = true" class="p-1 text-slate-500 hover:text-blue-400"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg></button>
+                                            @if($canDelete)<button @click="deleteSchedule({{ $schedule->id }})" class="p-1 text-slate-500 hover:text-red-400"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>
+                                            @else<span class="p-1 text-slate-600"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg></span>@endif
+                                        </div>
+                                    </template>
+                                    <template x-if="editing">
+                                        <div class="flex items-center justify-center gap-1">
+                                            <button @click="updateSchedule({{ $schedule->id }}, form); editing = false" class="p-1 bg-green-600 text-white rounded hover:bg-green-500"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></button>
+                                            <button @click="editing = false" class="p-1 bg-slate-600 text-white rounded hover:bg-slate-500"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
+                                        </div>
+                                    </template>
+                                </td>
+                            </tr>
+                            @endforeach
+                        @endif
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- All Monthly Details (Collapsible) -->
+        @if(count($contractYearPeriods) > 1)
+        <div x-data="{ showAllDetails: false }" class="border-t border-slate-600">
+            <button @click="showAllDetails = !showAllDetails" class="w-full px-4 py-2 text-left text-xs text-slate-400 hover:bg-slate-700/30 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <span class="font-medium">Barcha oylik tafsilotlar</span>
+                    @php
+                        $totalSchedules = collect($contractYearPeriods)->sum(fn($p) => $p['schedules']->count());
+                    @endphp
+                    <span class="text-[10px] px-2 py-0.5 bg-slate-700/50 text-slate-400 rounded">{{ $totalSchedules }} oy ({{ count($contractYearPeriods) }} davr)</span>
+                </div>
+                <svg :class="showAllDetails ? 'rotate-180' : ''" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </button>
+            <div x-show="showAllDetails" x-collapse>
                 <table class="w-full text-xs">
                     <thead class="bg-slate-700/50 text-slate-300">
                         <tr>
@@ -546,6 +860,7 @@ function formatLotSum($num) {
                 </table>
             </div>
         </div>
+        @endif
         @else
         <div class="px-4 py-8 text-center text-slate-500 text-sm">To'lov grafigi yo'q</div>
         @endif
