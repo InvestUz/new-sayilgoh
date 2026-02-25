@@ -6,6 +6,7 @@ use App\Models\Contract;
 use App\Models\Lot;
 use App\Models\Payment;
 use App\Models\Tenant;
+use App\Services\ScheduleDisplayService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -931,7 +932,24 @@ class WebController extends Controller
             ];
         }
 
-        return view('blade.lots.show', compact('lot', 'contract', 'stats'));
+        // Get schedule display data from service
+        $scheduleService = new ScheduleDisplayService();
+        if ($contract) {
+            // Get current period dates from ContractPeriodService
+            $periodService = \App\Services\ContractPeriodService::forContract($contract);
+            $currentPeriod = $periodService->getCurrentPeriod();
+                    
+            $periodDates = $currentPeriod ? [
+                'start' => $currentPeriod['start'],
+                'end' => $currentPeriod['end'],
+            ] : null;
+                    
+            $scheduleDisplayData = $scheduleService->getScheduleDisplayData($contract, $periodDates);
+        } else {
+            $scheduleDisplayData = ['schedules' => [], 'is_contract_expired' => false, 'reference_date' => $today->format('Y-m-d')];
+        }
+        
+        return view('blade.lots.show', compact('lot', 'contract', 'stats', 'scheduleDisplayData'));
     }
 
     public function lotsStore(Request $request)

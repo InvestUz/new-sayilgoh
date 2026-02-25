@@ -4,13 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Models\Lot;
 use App\Services\ContractPeriodService;
+use App\Services\ScheduleDisplayService;
 use Illuminate\View\View;
 
 class LotPageController extends Controller
 {
     public function show(Lot $lot): View
     {
-        $lot->load(['contracts.tenant', 'contracts.paymentSchedules']);
+        $lot->load(['contracts.tenant', 'contracts.paymentSchedules', 'contracts.payments']);
 
         $activeContract = $lot->contracts->where('holat', 'faol')->first();
 
@@ -22,6 +23,7 @@ class LotPageController extends Controller
         $isContractExpired = false;
         $currentMonth = null;
         $currentYear = null;
+        $scheduleDisplayData = ['schedules' => [], 'is_contract_expired' => false, 'reference_date' => now()->format('Y-m-d')];
 
         if ($activeContract) {
             $periodService = ContractPeriodService::forContract($activeContract);
@@ -32,6 +34,17 @@ class LotPageController extends Controller
             $currentMonthYear = $periodService->getCurrentMonthYear();
             $currentMonth = $currentMonthYear['month'];
             $currentYear = $currentMonthYear['year'];
+
+            // Get schedule display data from service (current period only)
+            $scheduleService = new ScheduleDisplayService();
+            $currentPeriod = $periodService->getCurrentPeriod();
+
+            $periodDates = $currentPeriod ? [
+                'start' => $currentPeriod['start'],
+                'end' => $currentPeriod['end'],
+            ] : null;
+
+            $scheduleDisplayData = $scheduleService->getScheduleDisplayData($activeContract, $periodDates);
         }
 
         return view('lots.show', compact(
@@ -42,7 +55,8 @@ class LotPageController extends Controller
             'grandTotals',
             'isContractExpired',
             'currentMonth',
-            'currentYear'
+            'currentYear',
+            'scheduleDisplayData'
         ));
     }
 }
