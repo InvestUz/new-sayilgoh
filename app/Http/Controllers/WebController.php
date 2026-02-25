@@ -363,22 +363,44 @@ class WebController extends Controller
 
         // Physical Device Summary (using Lots as "devices")
         $totalLots = Lot::count();
-        $activeLots = Lot::whereHas('contracts', function($q) {
+
+        // Lots with active contracts in selected year (if year filter is set)
+        $activeLots = Lot::whereHas('contracts', function($q) use ($year) {
             $q->where('holat', 'faol');
+            if ($year) {
+                $q->whereYear('boshlanish_sanasi', $year);
+            }
         })->count();
+
         $vacantLots = Lot::where('holat', 'bosh')->count();
         $umumiyMaydon = Lot::sum('maydon');
 
-        // Contracts - count all active without year filter for main stats
-        $activeContracts = Contract::where('holat', 'faol')->count();
-        $totalContractValue = Contract::where('holat', 'faol')->sum('shartnoma_summasi');
-        $expiredContracts = Contract::where('holat', '!=', 'faol')->count();
+        // Contracts - main stats (respect year filter when provided)
+        $contractsBaseQuery = Contract::query();
+        if ($year) {
+            $contractsBaseQuery->whereYear('boshlanish_sanasi', $year);
+        }
 
-        // Tenants
-        $totalTenants = Tenant::count();
-        $activeTenants = Tenant::whereHas('contracts', function($q) {
-            $q->where('holat', 'faol');
-        })->count();
+        $activeContracts = (clone $contractsBaseQuery)->where('holat', 'faol')->count();
+        $totalContractValue = (clone $contractsBaseQuery)->where('holat', 'faol')->sum('shartnoma_summasi');
+        $expiredContracts = (clone $contractsBaseQuery)->where('holat', '!=', 'faol')->count();
+
+        // Tenants - count based on contracts in selected year when year filter is set
+        if ($year) {
+            $totalTenants = Tenant::whereHas('contracts', function($q) use ($year) {
+                $q->whereYear('boshlanish_sanasi', $year);
+            })->count();
+
+            $activeTenants = Tenant::whereHas('contracts', function($q) use ($year) {
+                $q->where('holat', 'faol')
+                  ->whereYear('boshlanish_sanasi', $year);
+            })->count();
+        } else {
+            $totalTenants = Tenant::count();
+            $activeTenants = Tenant::whereHas('contracts', function($q) {
+                $q->where('holat', 'faol');
+            })->count();
+        }
 
         // Build Payment Schedules query with filters
         $schedulesQuery = \App\Models\PaymentSchedule::query();
@@ -412,10 +434,11 @@ class WebController extends Controller
         }
         $totalPayments = $paymentsQuery->count();
 
+        $thisMonthYear = $year ?: $bugun->year;
         $thisMonthPayments = Payment::whereMonth('tolov_sanasi', $bugun->month)
-            ->whereYear('tolov_sanasi', $bugun->year)->count();
+            ->whereYear('tolov_sanasi', $thisMonthYear)->count();
         $thisMonthSum = Payment::whereMonth('tolov_sanasi', $bugun->month)
-            ->whereYear('tolov_sanasi', $bugun->year)->sum('summa');
+            ->whereYear('tolov_sanasi', $thisMonthYear)->sum('summa');
 
         // Overdue calculation (past due with remaining balance) - with year filter (using effective deadline)
         $overdueQuery = \App\Models\PaymentSchedule::whereRaw('COALESCE(custom_oxirgi_muddat, oxirgi_muddat) < ?', [$bugun])
