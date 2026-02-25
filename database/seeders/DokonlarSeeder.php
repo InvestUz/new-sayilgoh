@@ -318,10 +318,11 @@ class DokonlarSeeder extends Seeder
             $tolovSanasi = Carbon::create(
                 $paymentDate->year,
                 $paymentDate->month,
-                min(20, $paymentDate->daysInMonth)
+                min(10, $paymentDate->daysInMonth)
             );
 
-            $oxirgiMuddat = $tolovSanasi->copy()->endOfMonth();
+            // Deadline is same as payment date (10th of month)
+            $oxirgiMuddat = $tolovSanasi->copy();
 
             // EXPIRED CONTRACT RULE: Don't calculate penalty for expired contracts
             if ($isContractExpired) {
