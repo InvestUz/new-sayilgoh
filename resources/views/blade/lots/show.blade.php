@@ -588,6 +588,31 @@ function formatLotSum($num) {
                                     }
                                 }
 
+                                // Check if 10th of month has passed (debtor status based on 10th)
+                                $paymentDue10th = \Carbon\Carbon::create($schedule->yil, $schedule->oy, 10);
+
+                                // Calculate overdue days based on payment timing
+                                if ($schedule->tolangan_summa > 0 && $lastPaymentDate) {
+                                    // Paid - check if deadline has passed (not current month)
+                                    $isCurrentMonthSchedule = ($schedule->oy == $currentMonth && $schedule->yil == $currentYear);
+                                    if (!$isCurrentMonthSchedule && $lastPaymentDate->gt($paymentDue10th)) {
+                                        // Past month paid late - show days between 10th and payment date
+                                        $overdueDays = $paymentDue10th->diffInDays($lastPaymentDate);
+                                        $isOverdue = true;
+                                    } else {
+                                        // Current month or on-time payment
+                                        $isOverdue = false;
+                                        $overdueDays = 0;
+                                    }
+                                } elseif ($bugun->gt($paymentDue10th) && $schedule->qoldiq_summa > 0) {
+                                    // Unpaid and overdue - show days from 10th to today
+                                    $overdueDays = $paymentDue10th->diffInDays($bugun);
+                                    $isOverdue = true;
+                                } else {
+                                    $isOverdue = false;
+                                    $overdueDays = 0;
+                                }
+
                                 // PENALTY CALCULATION based on effective deadline
                                 // EXPIRED CONTRACT RULE: Don't calculate penalty for expired contracts
                                 $kechikish = 0;
@@ -597,15 +622,14 @@ function formatLotSum($num) {
                                     // Contract expired - no penalty calculation
                                     $kechikish = 0;
                                     $penyaHisob = 0;
-                                } elseif ($schedule->qoldiq_summa > 0 && $isOverdue) {
+                                } elseif ($isOverdue) {
+                                    // Payment date passed - calculate penalty
                                     $kechikish = $overdueDays;
                                     $penyaRate = 0.0004;
-                                    $rawPenya = $schedule->qoldiq_summa * $penyaRate * $kechikish;
-                                    $maxPenya = $schedule->qoldiq_summa * 0.5;
+                                    $baseAmount = $schedule->qoldiq_summa > 0 ? $schedule->qoldiq_summa : $schedule->tolov_summasi;
+                                    $rawPenya = $baseAmount * $penyaRate * $kechikish;
+                                    $maxPenya = $baseAmount * 0.5;
                                     $penyaHisob = min($rawPenya, $maxPenya);
-                                } elseif ($schedule->tolangan_summa > 0 && $tolanganPenya > 0) {
-                                    $kechikish = $schedule->kechikish_kunlari ?? 0;
-                                    $penyaHisob = $schedule->penya_summasi ?? 0;
                                 }
 
                                 $qoldiqPenya = max(0, $penyaHisob - $tolanganPenya);
@@ -755,6 +779,31 @@ function formatLotSum($num) {
                                     }
                                 }
 
+                                // Check if 10th of month has passed (debtor status based on 10th)
+                                $paymentDue10th = \Carbon\Carbon::create($schedule->yil, $schedule->oy, 10);
+
+                                // Calculate overdue days based on payment timing
+                                if ($schedule->tolangan_summa > 0 && $lastPaymentDate) {
+                                    // Paid - check if deadline has passed (not current month)
+                                    $isCurrentMonthSchedule = ($schedule->oy == $currentMonth && $schedule->yil == $currentYear);
+                                    if (!$isCurrentMonthSchedule && $lastPaymentDate->gt($paymentDue10th)) {
+                                        // Past month paid late - show days between 10th and payment date
+                                        $overdueDays = $paymentDue10th->diffInDays($lastPaymentDate);
+                                        $isOverdue = true;
+                                    } else {
+                                        // Current month or on-time payment
+                                        $isOverdue = false;
+                                        $overdueDays = 0;
+                                    }
+                                } elseif ($bugun->gt($paymentDue10th) && $schedule->qoldiq_summa > 0) {
+                                    // Unpaid and overdue - show days from 10th to today
+                                    $overdueDays = $paymentDue10th->diffInDays($bugun);
+                                    $isOverdue = true;
+                                } else {
+                                    $isOverdue = false;
+                                    $overdueDays = 0;
+                                }
+
                                 // PENALTY CALCULATION based on effective deadline
                                 // EXPIRED CONTRACT RULE: Don't calculate penalty for expired contracts
                                 $kechikish = 0;
@@ -770,9 +819,10 @@ function formatLotSum($num) {
                                     $rawPenya = $schedule->qoldiq_summa * $penyaRate * $kechikish;
                                     $maxPenya = $schedule->qoldiq_summa * 0.5;
                                     $penyaHisob = min($rawPenya, $maxPenya);
-                                } elseif ($schedule->tolangan_summa > 0 && $tolanganPenya > 0) {
-                                    $kechikish = $schedule->kechikish_kunlari ?? 0;
-                                    $penyaHisob = $schedule->penya_summasi ?? 0;
+                                } elseif ($schedule->tolangan_summa > 0) {
+                                    // Paid - NO penalty for on-time payment
+                                    $kechikish = 0;
+                                    $penyaHisob = 0;
                                 }
 
                                 $qoldiqPenya = max(0, $penyaHisob - $tolanganPenya);

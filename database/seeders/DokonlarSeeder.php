@@ -321,7 +321,7 @@ class DokonlarSeeder extends Seeder
                 min(20, $paymentDate->daysInMonth)
             );
 
-            $oxirgiMuddat = $tolovSanasi->copy()->addDays(10);
+            $oxirgiMuddat = $tolovSanasi->copy()->endOfMonth();
 
             // EXPIRED CONTRACT RULE: Don't calculate penalty for expired contracts
             if ($isContractExpired) {

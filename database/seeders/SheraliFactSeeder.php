@@ -140,7 +140,8 @@ class SheraliFactSeeder extends Seeder
         }
 
         $rowNumber = 0;
-        $this->command->info('Processing CSV rows...');
+        $allRows = [];
+        $this->command->info('Reading and sorting CSV rows by date...');
 
         while (($row = fgetcsv($handle, 0, ';')) !== false) {
             $rowNumber++;
@@ -159,15 +160,39 @@ class SheraliFactSeeder extends Seeder
                 continue;
             }
 
-            $this->processRow($row, $rowNumber);
+            // Parse date for sorting
+            $dateStr = trim($row[0] ?? '');
+            $date = $this->parseDate($dateStr);
 
-            if ($rowNumber % 100 === 0) {
-                $this->command->info("  Processed {$rowNumber} rows...");
-            }
+            $allRows[] = [
+                'row_number' => $rowNumber,
+                'data' => $row,
+                'date' => $date,
+            ];
         }
 
         fclose($handle);
-        $this->command->info("  Total rows scanned: {$rowNumber}");
+
+        // Sort all rows by date
+        usort($allRows, function($a, $b) {
+            if (!$a['date'] || !$b['date']) {
+                return 0;
+            }
+            return $a['date']->timestamp <=> $b['date']->timestamp;
+        });
+
+        $this->command->info('Processing ' . count($allRows) . ' rows in chronological order...');
+
+        // Process rows in date order
+        foreach ($allRows as $index => $rowData) {
+            $this->processRow($rowData['data'], $rowData['row_number']);
+
+            if (($index + 1) % 100 === 0) {
+                $this->command->info('  Processed ' . ($index + 1) . ' rows...');
+            }
+        }
+
+        $this->command->info('  Total rows processed: ' . count($allRows));
         $this->command->info('');
     }
 

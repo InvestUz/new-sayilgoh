@@ -63,6 +63,7 @@ class PaymentObserver
      * - Rule 5: Each month calculated independently
      * - Rule 6: Allocation order: penalty -> rent -> advance
      * - Rule 8: If penalty = 0, skip penalty allocation
+     * - Priority: Apply to payment month first, then FIFO for remainder
      */
     private function applyPaymentToSchedules(Payment $payment): void
     {
@@ -82,24 +83,43 @@ class PaymentObserver
         $totalPrincipalPaid = 0;
         $totalPenaltyPaid = 0;
 
-        // Get all schedules with debt, ordered by month (FIFO)
-        $schedules = PaymentSchedule::where('contract_id', $contract->id)
-            ->whereIn('holat', ['tolanmagan', 'qisman_tolangan', 'kutilmoqda'])
+        // Priority 1: Try to apply to the schedule matching payment month/year
+        $targetSchedule = PaymentSchedule::where('contract_id', $contract->id)
+            ->where('oy', $paymentDate->month)
+            ->where('yil', $paymentDate->year)
             ->where('qoldiq_summa', '>', 0)
-            ->orderBy('oy_raqami')
-            ->get();
+            ->first();
 
-        foreach ($schedules as $schedule) {
-            if ($remainingAmount <= 0) {
-                break;
-            }
-
-            // Apply payment to this schedule with proper penalty calculation
-            $result = $this->applyToSchedule($schedule, $remainingAmount, $paymentDate);
-
+        if ($targetSchedule && $remainingAmount > 0) {
+            $result = $this->applyToSchedule($targetSchedule, $remainingAmount, $paymentDate);
             $totalPenaltyPaid += $result['penalty_paid'];
             $totalPrincipalPaid += $result['principal_paid'];
             $remainingAmount = $result['remaining'];
+        }
+
+        // Priority 2: Apply remaining amount to other schedules with debt (FIFO)
+        if ($remainingAmount > 0) {
+            $schedules = PaymentSchedule::where('contract_id', $contract->id)
+                ->whereIn('holat', ['tolanmagan', 'qisman_tolangan', 'kutilmoqda'])
+                ->where('qoldiq_summa', '>', 0)
+                ->orderBy('oy_raqami')
+                ->get();
+
+            foreach ($schedules as $schedule) {
+                // Skip the target schedule we already processed
+                if ($targetSchedule && $schedule->id === $targetSchedule->id) {
+                    continue;
+                }
+
+                if ($remainingAmount <= 0) {
+                    break;
+                }
+
+                $result = $this->applyToSchedule($schedule, $remainingAmount, $paymentDate);
+                $totalPenaltyPaid += $result['penalty_paid'];
+                $totalPrincipalPaid += $result['principal_paid'];
+                $remainingAmount = $result['remaining'];
+            }
         }
 
         // Rule 6d: Remaining amount goes to advance balance
