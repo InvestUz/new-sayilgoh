@@ -6,6 +6,7 @@ use App\Models\Contract;
 use App\Services\ContractPeriodService;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use Carbon\Carbon;
 
 class ContractPageController extends Controller
 {
@@ -38,6 +39,17 @@ class ContractPageController extends Controller
         $currentMonth = $currentMonthYear['month'];
         $currentYear = $currentMonthYear['year'];
 
+        // Debt (QOLDIQ) = only unpaid installments whose due date has already passed
+        $today = Carbon::today();
+        $overdueDebt = $contract->paymentSchedules->filter(function ($schedule) use ($today) {
+            if ($schedule->qoldiq_summa <= 0) {
+                return false;
+            }
+
+            $effectiveDeadline = $schedule->custom_oxirgi_muddat ?? $schedule->oxirgi_muddat;
+            return $effectiveDeadline && Carbon::parse($effectiveDeadline)->lt($today);
+        })->sum('qoldiq_summa');
+
         // Calculate statistics with dynamic penalty calculation
         $totalPenya = $contract->paymentSchedules->sum(function($schedule) {
             return $schedule->getPenaltyDetails()['calculated_penalty'];
@@ -46,7 +58,7 @@ class ContractPageController extends Controller
         $stats = [
             'jami_summa' => $contract->shartnoma_summasi,
             'tolangan' => $contract->paymentSchedules->sum('tolangan_summa'),
-            'qoldiq' => $contract->paymentSchedules->sum('qoldiq_summa'),
+            'qoldiq' => $overdueDebt,
             'penya' => $totalPenya,
         ];
 

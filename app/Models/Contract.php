@@ -141,7 +141,20 @@ class Contract extends Model
      */
     public function getJamiQarzdorlikAttribute(): float
     {
-        return $this->paymentSchedules()->sum('qoldiq_summa');
+        $today = Carbon::today();
+
+        // Debt (qarzdorlik) = only unpaid amounts whose due date has already passed
+        return $this->paymentSchedules()
+            ->where('qoldiq_summa', '>', 0)
+            ->where(function ($q) use ($today) {
+                $q->whereNotNull('custom_oxirgi_muddat')
+                  ->whereDate('custom_oxirgi_muddat', '<', $today)
+                  ->orWhere(function ($q2) use ($today) {
+                      $q2->whereNull('custom_oxirgi_muddat')
+                         ->whereDate('oxirgi_muddat', '<', $today);
+                  });
+            })
+            ->sum('qoldiq_summa');
     }
 
     /**

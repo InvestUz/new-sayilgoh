@@ -913,7 +913,7 @@ class WebController extends Controller
                 'jami_summa' => $contract->shartnoma_summasi,
                 'tolangan' => $netPaid, // Real payments minus refunds
                 'qoldiq' => max(0, $contract->shartnoma_summasi - $netPaid),
-                'penya' => $contract->paymentSchedules->sum('penya_summasi') - $contract->paymentSchedules->sum('tolangan_penya'),
+                'penya' => max(0, $contract->paymentSchedules->sum('penya_summasi') - $contract->paymentSchedules->sum('tolangan_penya')),
                 'real_payments' => $realPaid,
                 'refunds' => $refundSum,
             ];

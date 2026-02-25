@@ -339,7 +339,7 @@ function formatLotSum($num) {
         $stats = $currentPeriodData ? [
             'jami_summa' => $currentPeriodData['total'],
             'tolangan' => $currentPeriodData['paid'],
-            'qoldiq' => $currentPeriodData['debt'],
+            'qoldiq' => $currentPeriodData['overdue'],
             'penya' => $currentPeriodData['penya'],
         ] : [
             'jami_summa' => 0,
