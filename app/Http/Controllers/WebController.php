@@ -881,6 +881,8 @@ class WebController extends Controller
     {
         $lot->load(['contracts.tenant', 'contracts.paymentSchedules', 'contracts.payments']);
 
+        $today = Carbon::today();
+
         // Get active contract
         $contract = $lot->contracts->where('holat', 'faol')->first();
 
@@ -909,10 +911,20 @@ class WebController extends Controller
             // Net paid = real payments - refunds
             $netPaid = $realPaid - $refundSum;
 
+            // Debt (QOLDIQ) = only unpaid installments whose effective due date is before today
+            $overdueDebt = $contract->paymentSchedules->filter(function ($schedule) use ($today) {
+                if ($schedule->qoldiq_summa <= 0) {
+                    return false;
+                }
+
+                $effectiveDeadline = $schedule->custom_oxirgi_muddat ?? $schedule->oxirgi_muddat;
+                return $effectiveDeadline && Carbon::parse($effectiveDeadline)->lt($today);
+            })->sum('qoldiq_summa');
+
             $stats = [
                 'jami_summa' => $contract->shartnoma_summasi,
                 'tolangan' => $netPaid, // Real payments minus refunds
-                'qoldiq' => max(0, $contract->shartnoma_summasi - $netPaid),
+                'qoldiq' => $overdueDebt,
                 'penya' => max(0, $contract->paymentSchedules->sum('penya_summasi') - $contract->paymentSchedules->sum('tolangan_penya')),
                 'real_payments' => $realPaid,
                 'refunds' => $refundSum,
