@@ -26,6 +26,8 @@ class Contract extends Model
         'auksion_bayonnoma_raqami',
         'auksion_xarajati',
         'shartnoma_summasi',
+        'yillik_ijara_haqi',
+        'shartnoma_izohi',
         'oylik_tolovi',
         'shartnoma_muddati',
         'boshlanish_sanasi',
@@ -51,6 +53,7 @@ class Contract extends Model
         'birinchi_tolov_sanasi' => 'date',
         'dalolatnoma_sanasi' => 'date',
         'shartnoma_summasi' => 'decimal:2',
+        'yillik_ijara_haqi' => 'decimal:2',
         'oylik_tolovi' => 'decimal:2',
         'auksion_xarajati' => 'decimal:2',
         'qoshimcha_shartlar' => 'array',
@@ -162,6 +165,29 @@ class Contract extends Model
     }
 
     /**
+     * Get actual annual rent (use yillik_ijara_haqi if set, fallback to shartnoma_summasi)
+     */
+    public function getYillikIjaraHaqiAttribute($value): float
+    {
+        return $value ?? $this->attributes['shartnoma_summasi'] ?? 0;
+    }
+
+    /**
+     * Get monthly payment amount based on annual rent
+     */
+    public function getOylikTolovAttribute($value): float
+    {
+        // If explicitly set, use it
+        if ($value && $value > 0) {
+            return $value;
+        }
+
+        // Otherwise calculate from annual rent
+        $annualRent = $this->attributes['yillik_ijara_haqi'] ?? $this->attributes['shartnoma_summasi'] ?? 0;
+        return $annualRent > 0 ? round($annualRent / 12, 2) : 0;
+    }
+
+    /**
      * Holat nomi (O'zbekcha)
      */
     public function getHolatNomiAttribute(): string
@@ -220,14 +246,20 @@ class Contract extends Model
     // ============================================
 
     /**
-     * To'lov grafigini yaratish
+     * To'lov grafigini yaratish (ANNUAL RENT MODEL)
+     * Monthly payment = annual rent ÷ 12, repeated for contract duration
      */
     public function generatePaymentSchedule(): void
     {
         // Mavjud grafikni AVVAL o'chirish (tranzaksiyadan tashqarida)
         DB::table('payment_schedules')->where('contract_id', $this->id)->delete();
 
-        $oylikTolov = $this->shartnoma_summasi / $this->shartnoma_muddati;
+        // Get annual rent (yillik_ijara_haqi or shartnoma_summasi)
+        $annualRent = $this->yillik_ijara_haqi ?? $this->shartnoma_summasi;
+
+        // Monthly payment = annual rent ÷ 12
+        $oylikTolov = round($annualRent / 12, 2);
+
         $boshlanishSanasi = Carbon::parse($this->boshlanish_sanasi);
 
         // Sozlanadigan qiymatlar (default: 10)

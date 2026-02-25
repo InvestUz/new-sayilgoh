@@ -257,7 +257,9 @@ class DokonlarSeeder extends Seeder
         $duration = $startDate->diffInMonths($endDate);
         if ($duration < 1) $duration = 12; // Minimum 12 months
 
-        $monthlyPayment = $contractAmount / $duration;
+        // ANNUAL RENT MODEL: CSV amount is annual rent, monthly = annual ÷ 12
+        $annualRent = $contractAmount;
+        $monthlyPayment = round($annualRent / 12, 2);
 
         $contractNumber = $data['contract_number'];
         if (empty($contractNumber) || !is_numeric($contractNumber)) {
@@ -287,7 +289,8 @@ class DokonlarSeeder extends Seeder
             'shartnoma_raqami' => $contractNumber,
             'shartnoma_sanasi' => $contractDate,
             'auksion_sanasi' => $contractDate,
-            'shartnoma_summasi' => $contractAmount,
+            'shartnoma_summasi' => $annualRent,
+            'yillik_ijara_haqi' => $annualRent,
             'oylik_tolovi' => $monthlyPayment,
             'shartnoma_muddati' => $duration,
             'boshlanish_sanasi' => $startDate,
