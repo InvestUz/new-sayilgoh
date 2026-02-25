@@ -147,9 +147,10 @@ class ScheduleDisplayService
         $isPaid = $schedule->tolangan_summa > 0;
         $hasDebt = $schedule->qoldiq_summa > 0;
 
-        // Find payment date if paid
+        // Find payment date if paid - only if payment was made in the same month
         $paymentDate = null;
         if ($isPaid) {
+            // Look for payments made in this schedule's month
             foreach ($contract->payments->sortBy('tolov_sanasi') as $pmt) {
                 $pmtDate = Carbon::parse($pmt->tolov_sanasi);
                 if ($pmtDate->month == $schedule->oy && $pmtDate->year == $schedule->yil) {
@@ -160,20 +161,12 @@ class ScheduleDisplayService
         }
 
         // Calculate overdue status
-        if ($isPaid && $paymentDate) {
-            // Schedule has payment - show payment delay days (10th to payment date)
-            if ($paymentDate->gt($paymentDue10th)) {
-                // Paid after 10th - show delay
-                if ($isCurrentMonth) {
-                    // Current month - no penalty display
-                    return [
-                        'is_overdue' => false,
-                        'overdue_days' => 0,
-                        'days_left' => 0,
-                        'payment_date' => $paymentDate->format('d.m.Y'),
-                    ];
-                } else {
-                    // Past month - show payment delay
+        if ($isPaid) {
+            // Fully paid schedule
+            if (!$hasDebt) {
+                // Fully paid - only show days if we found a payment in this month
+                if ($paymentDate && $paymentDate->gt($paymentDue10th) && !$isCurrentMonth) {
+                    // Paid late in this month - show delay
                     return [
                         'is_overdue' => true,
                         'overdue_days' => $paymentDue10th->diffInDays($paymentDate),
@@ -181,15 +174,25 @@ class ScheduleDisplayService
                         'payment_date' => $paymentDate->format('d.m.Y'),
                     ];
                 }
+
+                // Paid on time or by FIFO from another month - show "—"
+                return [
+                    'is_overdue' => false,
+                    'overdue_days' => 0,
+                    'days_left' => 0,
+                    'payment_date' => $paymentDate ? $paymentDate->format('d.m.Y') : null,
+                ];
             }
 
-            // Paid on time or before 10th
-            return [
-                'is_overdue' => false,
-                'overdue_days' => 0,
-                'days_left' => 0,
-                'payment_date' => $paymentDate->format('d.m.Y'),
-            ];
+            // Partially paid - show ongoing debt days
+            if ($today->gt($paymentDue10th)) {
+                return [
+                    'is_overdue' => true,
+                    'overdue_days' => $paymentDue10th->diffInDays($today),
+                    'days_left' => 0,
+                    'payment_date' => $paymentDate ? $paymentDate->format('d.m.Y') : null,
+                ];
+            }
         }
 
         // Unpaid schedule
@@ -203,7 +206,7 @@ class ScheduleDisplayService
             ];
         }
 
-        // Future schedule
+        // Future schedule or not yet due
         $daysUntilDeadline = $today->diffInDays($deadline, false);
         return [
             'is_overdue' => false,

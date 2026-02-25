@@ -63,7 +63,7 @@ class PaymentObserver
      * - Rule 5: Each month calculated independently
      * - Rule 6: Allocation order: penalty -> rent -> advance
      * - Rule 8: If penalty = 0, skip penalty allocation
-     * - Priority: Apply to payment month first, then FIFO for remainder
+     * - Priority: FIFO - Fill earliest unpaid schedules first (September → October → November)
      */
     private function applyPaymentToSchedules(Payment $payment): void
     {
@@ -83,15 +83,21 @@ class PaymentObserver
         $totalPrincipalPaid = 0;
         $totalPenaltyPaid = 0;
 
-        // STRICT RULE: Apply payment ONLY to schedule matching payment month/year
-        // NO FIFO fallback - each payment stays with its intended month
-        $targetSchedule = PaymentSchedule::where('contract_id', $contract->id)
-            ->where('oy', $paymentDate->month)
-            ->where('yil', $paymentDate->year)
-            ->first();
+        // FIFO ALLOCATION: Get all unpaid schedules ordered by date (earliest first)
+        // This ensures October gets paid before November if October is unpaid
+        $unpaidSchedules = PaymentSchedule::where('contract_id', $contract->id)
+            ->where('qoldiq_summa', '>', 0)
+            ->orderBy('yil', 'asc')
+            ->orderBy('oy', 'asc')
+            ->get();
 
-        if ($targetSchedule && $remainingAmount > 0) {
-            $result = $this->applyToSchedule($targetSchedule, $remainingAmount, $paymentDate);
+        // Apply payment to schedules in FIFO order
+        foreach ($unpaidSchedules as $schedule) {
+            if ($remainingAmount <= 0) {
+                break;
+            }
+
+            $result = $this->applyToSchedule($schedule, $remainingAmount, $paymentDate);
             $totalPenaltyPaid += $result['penalty_paid'];
             $totalPrincipalPaid += $result['principal_paid'];
             $remainingAmount = $result['remaining'];
@@ -114,7 +120,7 @@ class PaymentObserver
             ]);
         });
 
-        Log::info("Payment #{$payment->id} applied", [
+        Log::info("Payment #{$payment->id} applied (FIFO)", [
             'payment_date' => $paymentDate->format('Y-m-d'),
             'total_amount' => $payment->summa,
             'principal' => $totalPrincipalPaid,
