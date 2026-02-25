@@ -261,10 +261,8 @@ function formatLotSum($num) {
 
                     $periodOverdue = $periodSchedules->filter(function($s) use ($bugun) {
                         if ($s->qoldiq_summa <= 0) return false;
-                        $effectiveDeadline = $s->custom_oxirgi_muddat
-                            ? \Carbon\Carbon::parse($s->custom_oxirgi_muddat)
-                            : \Carbon\Carbon::parse($s->oxirgi_muddat);
-                        return $effectiveDeadline->lt($bugun);
+                        $paymentDate = \Carbon\Carbon::parse($s->tolov_sanasi);
+                        return $paymentDate->lt($bugun);
                     })->sum('qoldiq_summa');
 
                     $periodPercent = $periodTotal > 0 ? round(($periodPaid / $periodTotal) * 100, 1) : 0;
@@ -311,10 +309,8 @@ function formatLotSum($num) {
 
         $grandOverdue = $allSchedules->filter(function($s) use ($bugun) {
             if ($s->qoldiq_summa <= 0) return false;
-            $effectiveDeadline = $s->custom_oxirgi_muddat
-                ? \Carbon\Carbon::parse($s->custom_oxirgi_muddat)
-                : \Carbon\Carbon::parse($s->oxirgi_muddat);
-            return $effectiveDeadline->lt($bugun);
+            $paymentDate = \Carbon\Carbon::parse($s->tolov_sanasi);
+            return $paymentDate->lt($bugun);
         })->sum('qoldiq_summa');
 
         $grandPercent = $grandTotal > 0 ? round(($grandPaid / $grandTotal) * 100, 1) : 0;
@@ -575,7 +571,7 @@ function formatLotSum($num) {
 
                                 // Calculate days: positive = future, negative = overdue
                                 $daysFromToday = $bugun->diffInDays($effectiveDeadline, false);
-                                $isOverdue = $daysFromToday < 0;
+                                $isOverdue = $daysFromToday <= 0;
                                 $overdueDays = $isOverdue ? abs($daysFromToday) : 0;
                                 $daysLeft = $isOverdue ? 0 : $daysFromToday;
 
@@ -742,7 +738,7 @@ function formatLotSum($num) {
 
                                 // Calculate days: positive = future, negative = overdue
                                 $daysFromToday = $bugun->diffInDays($effectiveDeadline, false);
-                                $isOverdue = $daysFromToday < 0;
+                                $isOverdue = $daysFromToday <= 0;
                                 $overdueDays = $isOverdue ? abs($daysFromToday) : 0;
                                 $daysLeft = $isOverdue ? 0 : $daysFromToday;
 

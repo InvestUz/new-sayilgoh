@@ -143,17 +143,10 @@ class Contract extends Model
     {
         $today = Carbon::today();
 
-        // Debt (qarzdorlik) = only unpaid amounts whose due date has already passed
+        // Debt (qarzdorlik) = only unpaid amounts whose payment date has passed
         return $this->paymentSchedules()
             ->where('qoldiq_summa', '>', 0)
-            ->where(function ($q) use ($today) {
-                $q->whereNotNull('custom_oxirgi_muddat')
-                  ->whereDate('custom_oxirgi_muddat', '<', $today)
-                  ->orWhere(function ($q2) use ($today) {
-                      $q2->whereNull('custom_oxirgi_muddat')
-                         ->whereDate('oxirgi_muddat', '<', $today);
-                  });
-            })
+            ->whereDate('tolov_sanasi', '<', $today)
             ->sum('qoldiq_summa');
     }
 

@@ -911,14 +911,14 @@ class WebController extends Controller
             // Net paid = real payments - refunds
             $netPaid = $realPaid - $refundSum;
 
-            // Debt (QOLDIQ) = only unpaid installments whose effective due date is before today
+            // Debt (QOLDIQ) = only unpaid installments whose payment date has passed
             $overdueDebt = $contract->paymentSchedules->filter(function ($schedule) use ($today) {
                 if ($schedule->qoldiq_summa <= 0) {
                     return false;
                 }
 
-                $effectiveDeadline = $schedule->custom_oxirgi_muddat ?? $schedule->oxirgi_muddat;
-                return $effectiveDeadline && Carbon::parse($effectiveDeadline)->lt($today);
+                $paymentDate = $schedule->tolov_sanasi;
+                return $paymentDate && Carbon::parse($paymentDate)->lt($today);
             })->sum('qoldiq_summa');
 
             $stats = [

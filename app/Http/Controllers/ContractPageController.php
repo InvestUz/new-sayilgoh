@@ -39,15 +39,15 @@ class ContractPageController extends Controller
         $currentMonth = $currentMonthYear['month'];
         $currentYear = $currentMonthYear['year'];
 
-        // Debt (QOLDIQ) = only unpaid installments whose due date has already passed
+        // Debt (QOLDIQ) = only unpaid installments whose payment date has passed
         $today = Carbon::today();
         $overdueDebt = $contract->paymentSchedules->filter(function ($schedule) use ($today) {
             if ($schedule->qoldiq_summa <= 0) {
                 return false;
             }
 
-            $effectiveDeadline = $schedule->custom_oxirgi_muddat ?? $schedule->oxirgi_muddat;
-            return $effectiveDeadline && Carbon::parse($effectiveDeadline)->lt($today);
+            $paymentDate = $schedule->tolov_sanasi;
+            return $paymentDate && Carbon::parse($paymentDate)->lt($today);
         })->sum('qoldiq_summa');
 
         // Calculate statistics with dynamic penalty calculation
