@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Log;
  *
  * Business Rules Applied:
  * 1. Penalty only if payment_date > due_date
- * 2. Formula: penalty = overdue_amount * 0.0004 * overdue_days
+ * 2. Formula: penalty = overdue_amount * 0.004 * overdue_days
  * 3. Cap: penalty <= overdue_amount * 0.5
  * 4. Each month calculated independently
  * 5. Remove any penalties not supported by overdue_days

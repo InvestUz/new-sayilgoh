@@ -152,7 +152,7 @@ class WebController extends Controller
                         $lotQarz += $schedule->qoldiq_summa;
                         $days = $oxirgiMuddat->diffInDays($bugun);
                         $lotKechikishKunlari = max($lotKechikishKunlari, $days);
-                        $penyaCalc = $schedule->qoldiq_summa * 0.0004 * $days;
+                        $penyaCalc = $schedule->qoldiq_summa * 0.004 * $days;
                         $maxPenya = $schedule->qoldiq_summa * 0.5;
                         $lotPenya += min($penyaCalc, $maxPenya);
                     } else {
@@ -814,7 +814,7 @@ class WebController extends Controller
                             $qarz += $schedule->qoldiq_summa;
                             $days = $oxirgiMuddat->diffInDays($bugun);
                             $kechikishKunlari = max($kechikishKunlari, $days);
-                            $penyaCalc = $schedule->qoldiq_summa * 0.0004 * $days;
+                            $penyaCalc = $schedule->qoldiq_summa * 0.004 * $days;
                             $maxPenya = $schedule->qoldiq_summa * 0.5;
                             $penya += min($penyaCalc, $maxPenya);
                         } else {
@@ -884,8 +884,9 @@ class WebController extends Controller
 
         $today = Carbon::today();
 
-        // Get active contract
-        $contract = $lot->contracts->where('holat', 'faol')->first();
+        // Get latest contract (active or expired)
+        // For lots with expired contracts, we still want to show the data
+        $contract = $lot->contracts->sortByDesc('id')->first();
 
         // Calculate penalties for active contract
         if ($contract) {
@@ -938,18 +939,23 @@ class WebController extends Controller
             // Get current period dates from ContractPeriodService
             $periodService = \App\Services\ContractPeriodService::forContract($contract);
             $currentPeriod = $periodService->getCurrentPeriod();
-                    
+
             $periodDates = $currentPeriod ? [
                 'start' => $currentPeriod['start'],
                 'end' => $currentPeriod['end'],
             ] : null;
-                    
+
+            // Get current period data (12 months)
             $scheduleDisplayData = $scheduleService->getScheduleDisplayData($contract, $periodDates);
+
+            // Get ALL schedules data for "Barcha oylik tafsilotlar" section
+            $allSchedulesData = $scheduleService->getScheduleDisplayData($contract, null); // null = all schedules
         } else {
             $scheduleDisplayData = ['schedules' => [], 'is_contract_expired' => false, 'reference_date' => $today->format('Y-m-d')];
+            $allSchedulesData = ['schedules' => [], 'is_contract_expired' => false, 'reference_date' => $today->format('Y-m-d')];
         }
-        
-        return view('blade.lots.show', compact('lot', 'contract', 'stats', 'scheduleDisplayData'));
+
+        return view('blade.lots.show', compact('lot', 'contract', 'stats', 'scheduleDisplayData', 'allSchedulesData'));
     }
 
     public function lotsStore(Request $request)

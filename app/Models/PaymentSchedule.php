@@ -51,9 +51,9 @@ class PaymentSchedule extends Model
     ];
 
     // Penalty constants (from contract section 8.2)
-    // Daily rate: 0.04% = 0.0004
-    const PENYA_FOIZI = 0.04; // 0.04% per day (displayed as percentage)
-    const PENYA_RATE = 0.0004; // 0.04% per day (decimal for calculation)
+    // Daily rate: 0.4% = 0.004
+    const PENYA_FOIZI = 0.4; // 0.4% per day (displayed as percentage)
+    const PENYA_RATE = 0.004; // 0.4% per day (decimal for calculation)
     const MAX_PENYA_FOIZI = 50; // Maximum 50% of debt
     const MAX_PENYA_RATE = 0.5; // Maximum 50% (decimal for calculation)
 
@@ -155,7 +155,7 @@ class PaymentSchedule extends Model
      * Uses PenaltyCalculatorService for contract-compliant calculation
      *
      * Contract Rules:
-     * - Rate: 0.04% per day
+     * - Rate: 0.4% per day
      * - Cap: 50% of overdue amount
      * - Only applies when current date > due date
      *
@@ -173,7 +173,7 @@ class PaymentSchedule extends Model
      *
      * Business Rules (Contract Section 8.2):
      * 1. If payment_date <= due_date → penalty = 0
-     * 2. penalty = overdue_amount * 0.0004 * overdue_days
+     * 2. penalty = overdue_amount * 0.004 * overdue_days
      * 3. penalty <= overdue_amount * 0.5 (cap)
      * 4. overdue_days = max(0, payment_date - due_date)
      *

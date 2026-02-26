@@ -150,7 +150,7 @@ class PaymentObserver
             // Rule 4: overdue_days = payment_date - due_date
             $overdueDays = $dueDate->diffInDays($paymentDate);
 
-            // Rule 2: penalty = overdue_amount * 0.0004 * overdue_days
+            // Rule 2: penalty = overdue_amount * 0.004 * overdue_days
             $overdueAmount = (float) $schedule->qoldiq_summa;
             $calculatedPenalty = $overdueAmount * PaymentSchedule::PENYA_RATE * $overdueDays;
 

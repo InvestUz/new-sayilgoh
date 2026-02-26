@@ -313,7 +313,8 @@ class DokonlarSeeder extends Seeder
         $schedules = [];
 
         for ($i = 0; $i < $duration; $i++) {
-            $paymentDate = $startDate->copy()->addMonths($i);
+            // Use addMonthsNoOverflow to prevent Feb 30 -> Mar 2 issue
+            $paymentDate = $startDate->copy()->addMonthsNoOverflow($i);
 
             $tolovSanasi = Carbon::create(
                 $paymentDate->year,
@@ -333,7 +334,7 @@ class DokonlarSeeder extends Seeder
             } elseif ($oxirgiMuddat->lt($bugun)) {
                 $holat = 'tolanmagan';
                 $kechikishKunlari = $oxirgiMuddat->diffInDays($bugun);
-                $penya = $monthlyPayment * 0.0004 * $kechikishKunlari;
+                $penya = $monthlyPayment * 0.004 * $kechikishKunlari;
                 $maxPenya = $monthlyPayment * 0.5;
                 $penya = min($penya, $maxPenya);
             } else {
