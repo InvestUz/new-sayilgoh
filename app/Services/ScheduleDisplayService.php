@@ -123,7 +123,7 @@ class ScheduleDisplayService
             'penya_summasi' => $penaltyData['penya_summasi'],
             'tolangan_penya' => $schedule->tolangan_penya ?? 0,
             'qoldiq_penya' => $penaltyData['qoldiq_penya'],
-            'penya_rate' => $daysData['is_overdue'] ? '0,04%' : null,
+            'penya_rate' => $daysData['is_overdue'] ? '0,4%' : null,
 
             // Status
             'holat' => $schedule->holat,
@@ -244,7 +244,7 @@ class ScheduleDisplayService
             ];
         }
 
-        $penaltyRate = 0.0004; // 0.04% per day
+        $penaltyRate = 0.004; // 0.4% per day
         $rawPenalty = $baseAmount * $penaltyRate * $overdueDays;
 
         // Cap at 50% of base amount

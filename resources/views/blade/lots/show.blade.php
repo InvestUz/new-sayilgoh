@@ -611,7 +611,14 @@ function formatLotSum($num) {
                                 </td>
                                 <td class="border border-slate-600 px-2 py-1 text-right {{ $scheduleData['tolangan_summa'] > 0 ? 'text-blue-400' : 'text-slate-500' }}">{{ $scheduleData['tolangan_summa'] > 0 ? number_format($scheduleData['tolangan_summa'], 0, ',', ' ') : '—' }}</td>
                                 <td class="border border-slate-600 px-2 py-1 text-center text-slate-400">{{ $lastPaymentDate ? $lastPaymentDate->format('d.m.Y') : '—' }}</td>
-                                <td class="border border-slate-600 px-2 py-1 text-right {{ $scheduleData['qoldiq_summa'] > 0 ? 'text-red-400' : 'text-green-400' }}">{{ $scheduleData['qoldiq_summa'] > 0 ? number_format($scheduleData['qoldiq_summa'], 0, ',', ' ') : '—' }}</td>
+                                {{-- QOLDIQ: Only show for past months (deadline passed), hide for future months --}}
+                                <td class="border border-slate-600 px-2 py-1 text-right {{ $scheduleData['qoldiq_summa'] > 0 ? 'text-red-400' : 'text-green-400' }}">
+                                    @if($isOverdue || $isCurrentMonth || $scheduleData['tolangan_summa'] > 0)
+                                        {{ $scheduleData['qoldiq_summa'] > 0 ? number_format($scheduleData['qoldiq_summa'], 0, ',', ' ') : '—' }}
+                                    @else
+                                        —
+                                    @endif
+                                </td>
                                 {{-- KUN COLUMN: Shows days overdue (red) or days left (green), from service --}}
                                 <td class="border border-slate-600 px-2 py-1 text-center {{ $isOverdue ? 'text-red-400 font-semibold' : ($daysLeft > 0 ? 'text-green-400' : 'text-slate-400') }}"
                                     title="{{ $scheduleData['muddat_ozgarish_izoh'] ?? '' }}">
@@ -738,7 +745,14 @@ function formatLotSum($num) {
                                 </td>
                                 <td class="border border-slate-600 px-2 py-1 text-right {{ $scheduleData['tolangan_summa'] > 0 ? 'text-blue-400' : 'text-slate-500' }}">{{ $scheduleData['tolangan_summa'] > 0 ? number_format($scheduleData['tolangan_summa'], 0, ',', ' ') : '—' }}</td>
                                 <td class="border border-slate-600 px-2 py-1 text-center text-slate-400">{{ $lastPaymentDate ? $lastPaymentDate->format('d.m.Y') : '—' }}</td>
-                                <td class="border border-slate-600 px-2 py-1 text-right {{ $scheduleData['qoldiq_summa'] > 0 ? 'text-red-400' : 'text-green-400' }}">{{ $scheduleData['qoldiq_summa'] > 0 ? number_format($scheduleData['qoldiq_summa'], 0, ',', ' ') : '—' }}</td>
+                                {{-- QOLDIQ: Only show for past months (deadline passed), hide for future months --}}
+                                <td class="border border-slate-600 px-2 py-1 text-right {{ $scheduleData['qoldiq_summa'] > 0 ? 'text-red-400' : 'text-green-400' }}">
+                                    @if($isOverdue || $isCurrentMonth || $scheduleData['tolangan_summa'] > 0)
+                                        {{ $scheduleData['qoldiq_summa'] > 0 ? number_format($scheduleData['qoldiq_summa'], 0, ',', ' ') : '—' }}
+                                    @else
+                                        —
+                                    @endif
+                                </td>
                                 <td class="border border-slate-600 px-2 py-1 text-center {{ $isOverdue ? 'text-red-400 font-semibold' : ($daysLeft > 0 ? 'text-green-400' : 'text-slate-400') }}"
                                     title="{{ $scheduleData['muddat_ozgarish_izoh'] ?? '' }}">
                                     @if($isOverdue)
