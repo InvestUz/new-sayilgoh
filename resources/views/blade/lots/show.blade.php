@@ -799,16 +799,35 @@ function formatLotSum($num) {
         <!-- Deadline Change Log -->
         @php
             $schedulesWithChanges = collect($contractYearPeriods)->flatMap(fn($p) => $p['schedules'])->filter(fn($s) => !empty($s->muddat_ozgarish_izoh));
+            $priceIncreaseChanges = $schedulesWithChanges->filter(fn($s) => strpos($s->muddat_ozgarish_izoh, '+14%') !== false);
+            $otherChanges = $schedulesWithChanges->filter(fn($s) => strpos($s->muddat_ozgarish_izoh, '+14%') === false);
         @endphp
-        @if($schedulesWithChanges->count() > 0)
-        <div class="mt-4 border-t border-slate-600 pt-3">
+        @if($priceIncreaseChanges->count() > 0 || $otherChanges->count() > 0)
+        <div class="mt-4 border-t border-slate-600 pt-3 space-y-3">
+            @if($priceIncreaseChanges->count() > 0)
+            <div class="px-4 py-2 bg-amber-900/20 border border-amber-500/30 rounded-lg">
+                <h4 class="text-xs font-bold text-amber-300 mb-2 flex items-center gap-2">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    Narx oshishi (01.01.2026 dan)
+                </h4>
+                <div class="space-y-1.5 text-[10px] text-amber-100">
+                    @foreach($priceIncreaseChanges as $schedule)
+                        <div class="bg-slate-800/50 rounded px-2 py-1.5 border-l-2 border-amber-400">
+                            <span class="font-medium text-amber-300">{{ $schedule->oy_nomi }} {{ $schedule->yil }}:</span>
+                            <div class="ml-2 mt-0.5 text-slate-300 whitespace-pre-line font-mono text-[9px]">{{ $schedule->muddat_ozgarish_izoh }}</div>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+            @endif
+            @if($otherChanges->count() > 0)
             <div class="px-4 py-2 bg-blue-900/20 border border-blue-500/30 rounded-lg">
                 <h4 class="text-xs font-bold text-blue-300 mb-2 flex items-center gap-2">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                     Muddat o'zgarishlari tarixi
                 </h4>
                 <div class="space-y-1.5 text-[10px] text-blue-200">
-                    @foreach($schedulesWithChanges as $schedule)
+                    @foreach($otherChanges as $schedule)
                         <div class="bg-slate-800/50 rounded px-2 py-1.5 border-l-2 border-blue-400">
                             <span class="font-medium text-blue-300">{{ $schedule->oy_nomi }} {{ $schedule->yil }}:</span>
                             <div class="ml-2 mt-0.5 text-slate-300 whitespace-pre-line">{{ $schedule->muddat_ozgarish_izoh }}</div>
@@ -816,6 +835,7 @@ function formatLotSum($num) {
                     @endforeach
                 </div>
             </div>
+            @endif
         </div>
         @endif
     </div>

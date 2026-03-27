@@ -310,6 +310,10 @@ class DokonlarSeeder extends Seeder
         // Check if contract is expired
         $isContractExpired = $contract->holat === 'tugagan';
 
+        // Price increase threshold (after January 1, 2026)
+        $priceIncreaseThreshold = Carbon::createFromDate(2026, 1, 1);
+        $priceIncreasePercent = 0.14; // 14% increase
+
         $schedules = [];
 
         for ($i = 0; $i < $duration; $i++) {
@@ -343,6 +347,19 @@ class DokonlarSeeder extends Seeder
                 $penya = 0;
             }
 
+            // Check if date is after 01.01.2026 for price increase
+            $originalAmount = $monthlyPayment;
+            $finalAmount = $monthlyPayment;
+            $priceIncreased = false;
+            $muddarOzgarishIzoh = null;
+
+            if ($tolovSanasi->gte($priceIncreaseThreshold)) {
+                $finalAmount = round($monthlyPayment * (1 + $priceIncreasePercent), 2);
+                $priceIncreased = true;
+                // Format for display: "oldPrice + 14% = newPrice"
+                $muddarOzgarishIzoh = number_format($originalAmount, 2, '.', ' ') . ' + 14% = ' . number_format($finalAmount, 2, '.', ' ');
+            }
+
             $schedules[] = [
                 'contract_id' => $contract->id,
                 'oy_raqami' => $i + 1,
@@ -350,13 +367,16 @@ class DokonlarSeeder extends Seeder
                 'yil' => $tolovSanasi->year,
                 'tolov_sanasi' => $tolovSanasi->format('Y-m-d'),
                 'oxirgi_muddat' => $oxirgiMuddat->format('Y-m-d'),
-                'tolov_summasi' => $monthlyPayment,
+                'tolov_summasi' => $finalAmount,
                 'tolangan_summa' => 0,
-                'qoldiq_summa' => $monthlyPayment,
+                'qoldiq_summa' => $finalAmount,
                 'penya_summasi' => $penya,
                 'tolangan_penya' => 0,
                 'kechikish_kunlari' => $kechikishKunlari,
                 'holat' => $holat,
+                'original_tolov_summasi' => $priceIncreased ? $originalAmount : null,
+                'price_increased_14_percent' => $priceIncreased,
+                'muddat_ozgarish_izoh' => $muddarOzgarishIzoh,
                 'created_at' => now(),
                 'updated_at' => now(),
             ];

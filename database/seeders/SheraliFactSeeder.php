@@ -151,8 +151,8 @@ class SheraliFactSeeder extends Seeder
                 continue;
             }
 
-            // Validate minimum columns
-            if (count($row) < 7) {
+            // Validate minimum columns (CSV has 6 columns: 0=Date, 1=Account, 2=MFO, 3=Amount, 4=Purpose, 5=LotRef)
+            if (count($row) < 6) {
                 $this->skipped[] = [
                     'row' => $rowNumber,
                     'reason' => 'Insufficient columns: ' . count($row),
@@ -199,12 +199,13 @@ class SheraliFactSeeder extends Seeder
     private function processRow(array $row, int $rowNumber): void
     {
         // Parse row data based on sayilgoh_fakt_cv.csv format
+        // CSV Columns: 0=Date, 1=Account, 2=MFO, 3=Amount, 4=Purpose, 5=LotRef
         $dateStr = trim($row[0] ?? '');
         $accountInfo = trim($row[1] ?? '');
-        $docNumber = trim($row[2] ?? '');
-        $amountStr = trim($row[5] ?? '');  // Column 5 = Amount
-        $purpose = trim($row[6] ?? '');    // Column 6 = Purpose
-        $lotRef = trim($row[7] ?? '');     // Column 7 = Lot/Contract reference (KEY!)
+        $docNumber = trim($row[2] ?? '');  // MFO Code as doc identifier
+        $amountStr = trim($row[3] ?? '');  // Column 3 = Amount (FIXED)
+        $purpose = trim($row[4] ?? '');    // Column 4 = Purpose (FIXED)
+        $lotRef = trim($row[5] ?? '');     // Column 5 = Lot/Contract reference (FIXED)
 
         // Parse amount
         $amount = $this->parseAmount($amountStr);
@@ -407,6 +408,18 @@ class SheraliFactSeeder extends Seeder
 
         // Method 2: Lot number (numeric) - check cache first
         $numericRef = preg_replace('/[^0-9]/', '', $primaryRef);
+
+        // Try with L wrapper (L12072321L format)
+        if ($numericRef) {
+            $wrappedRef = 'L' . $numericRef . 'L';
+            if (isset($this->lotCache[$wrappedRef])) {
+                $lot = $this->lotCache[$wrappedRef];
+                if ($lot->contracts->isNotEmpty()) {
+                    return $lot->contracts->first();
+                }
+            }
+        }
+
         if ($numericRef && isset($this->lotCache[$numericRef])) {
             $lot = $this->lotCache[$numericRef];
             if ($lot->contracts->isNotEmpty()) {
@@ -419,11 +432,26 @@ class SheraliFactSeeder extends Seeder
             return $this->contractCache[$numericRef];
         }
 
-        // Method 4: Database search for lot
+        // Method 4: Database search for lot - try both wrapped and unwrapped
         if ($numericRef) {
-            $lot = Lot::where('lot_raqami', 'LIKE', '%' . $numericRef . '%')
-                ->with(['contracts' => fn($q) => $q->where('holat', 'faol')->with('tenant')])
+            // Try wrapped format first
+            $lot = Lot::where('lot_raqami', 'L' . $numericRef . 'L')
+                ->with(['contracts' => fn($q) => $q->with('tenant')])
                 ->first();
+
+            if (!$lot) {
+                // Try unwrapped format
+                $lot = Lot::where('lot_raqami', $numericRef)
+                    ->with(['contracts' => fn($q) => $q->with('tenant')])
+                    ->first();
+            }
+
+            if (!$lot) {
+                // Try LIKE search
+                $lot = Lot::where('lot_raqami', 'LIKE', '%' . $numericRef . '%')
+                    ->with(['contracts' => fn($q) => $q->with('tenant')])
+                    ->first();
+            }
 
             if ($lot && $lot->contracts->isNotEmpty()) {
                 return $lot->contracts->first();
@@ -438,11 +466,7 @@ class SheraliFactSeeder extends Seeder
             }
         }
 
-        // Method 6: Auto-create missing LOT/Contract from payment data (LAST RESORT)
-        if ($numericRef && !empty($purpose)) {
-            return $this->createMissingContract($numericRef, $purpose);
-        }
-
+        // Do NOT auto-create missing lots - only import payments for existing lots
         return null;
     }
 
