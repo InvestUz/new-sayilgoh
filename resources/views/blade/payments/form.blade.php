@@ -53,8 +53,29 @@
                     <option value="bank_otkazmasi" {{ old('tolov_usuli') == 'bank_otkazmasi' ? 'selected' : '' }}>Bank o'tkazmasi</option>
                     <option value="naqd" {{ old('tolov_usuli') == 'naqd' ? 'selected' : '' }}>Naqd</option>
                     <option value="karta" {{ old('tolov_usuli') == 'karta' ? 'selected' : '' }}>Karta</option>
+                    <option value="onlayn" {{ old('tolov_usuli') == 'onlayn' ? 'selected' : '' }}>Onlayn</option>
                 </select>
             </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="form-label">Hujjat raqami <span class="text-[#64748b] text-xs">(takror-tagi himoya)</span></label>
+                    <input type="text" name="hujjat_raqami" maxlength="100" value="{{ old('hujjat_raqami') }}" class="form-input" placeholder="T-03-7501986">
+                </div>
+                <div>
+                    <label class="form-label">Izoh <span class="text-[#64748b] text-xs">(ixtiyoriy)</span></label>
+                    <input type="text" name="izoh" maxlength="255" value="{{ old('izoh') }}" class="form-input">
+                </div>
+            </div>
+
+            @error('*')
+                <div class="text-[#ef4444] text-xs mt-1">{{ $message }}</div>
+            @enderror
+
+            <label class="flex items-center gap-2 text-sm text-[#cbd5f5] pt-2 select-none">
+                <input type="checkbox" name="force" value="1" class="accent-[#f59e0b]">
+                <span>Dublicate ogohlantirishini bekor qilish (<b>juda ehtiyotkorlik bilan</b>)</span>
+            </label>
 
             <div class="flex items-center justify-between pt-4 border-t border-[rgba(56,189,248,0.08)]">
                 <a href="{{ route('registry', ['tab' => 'payments']) }}" class="text-[#64748b] hover:text-[#e2e8f0] text-sm flex items-center gap-1">
@@ -63,7 +84,10 @@
                 </a>
                 <div class="flex gap-3">
                     <a href="{{ route('registry', ['tab' => 'payments']) }}" class="btn btn-secondary">Bekor qilish</a>
-                    <button type="submit" class="btn btn-success">Saqlash</button>
+                    <button type="submit" class="btn btn-success"
+                        onclick="return confirm('Ushbu to\'lovni saqlashni tasdiqlaysizmi?\n\nDiqqat: fakt to\'lov to\'liq ASOSIY QARZGA yo\'naltiriladi, penya undan yechilmaydi.');">
+                        ✓ Saqlash
+                    </button>
                 </div>
             </div>
         </div>

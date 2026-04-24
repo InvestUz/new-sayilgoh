@@ -25,7 +25,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // Register Payment observer for automatic FIFO application
-        Payment::observe(PaymentObserver::class);
+        // NOTE: PaymentObserver is intentionally NOT registered here.
+        //
+        // Historically Payment::observe(PaymentObserver::class) was used, but the
+        // two main controller paths (Api\PaymentController::store and
+        // WebController::paymentsStore) already invoke applyPaymentFIFO() right
+        // after Payment::create(). Registering the observer caused every new
+        // payment to be applied to the schedules TWICE, inflating tolangan_summa
+        // and tolangan_penya. Allocation is now owned by the controllers only.
     }
 }

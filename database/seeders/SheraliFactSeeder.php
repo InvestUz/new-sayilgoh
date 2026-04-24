@@ -10,6 +10,7 @@ use App\Models\Tenant;
 use App\Models\Contract;
 use App\Models\Payment;
 use App\Models\PaymentSchedule;
+use App\Services\PaymentApplicator;
 use Carbon\Carbon;
 
 /**
@@ -608,15 +609,17 @@ class SheraliFactSeeder extends Seeder
                 'penya_uchun' => 0,
                 'auksion_uchun' => 0,
                 'avans' => 0,
-                'tolov_usuli' => 'bank_otkazmasi', // Use bank_otkazmasi for all (refunds identified by holat)
+                'tolov_usuli' => 'bank_otkazmasi',
                 'hujjat_raqami' => $docNumber,
                 'holat' => $isRefund ? 'qaytarilgan' : 'tasdiqlangan',
                 'izoh' => implode(' | ', $izohParts),
             ]);
 
-            // Note: For regular payments with 'tasdiqlangan' status,
-            // PaymentObserver automatically applies the payment to schedules.
-            // For refunds ('qaytarilgan'), we do NOT apply to schedules.
+            // Canonical applier — observer o'chirilgan, shuning uchun aniq chaqiramiz.
+            // Faqat tasdiqlangan to'lovlar schedule'larga qo'llaniladi.
+            if (!$isRefund) {
+                app(PaymentApplicator::class)->apply($payment, $contract);
+            }
 
             DB::commit();
         } catch (\Exception $e) {

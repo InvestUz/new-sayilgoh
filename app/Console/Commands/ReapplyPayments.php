@@ -161,8 +161,17 @@ class ReapplyPayments extends Command
                 ->orderBy('tolov_sanasi')
                 ->get();
 
+            // Canonical applier — hozirgi siyosat: principal-only, penya
+            // avtomatik yechilmaydi.
+            $applicator = app(\App\Services\PaymentApplicator::class);
             foreach ($payments as $payment) {
-                $this->applyPaymentFIFO($payment, $contract);
+                // reapply uchun oldingi taqsimotni nolga tushiramiz
+                $payment->asosiy_qarz_uchun = 0;
+                $payment->penya_uchun = 0;
+                $payment->avans = 0;
+                $payment->save();
+
+                $applicator->apply($payment, $contract);
             }
 
             DB::commit();
@@ -173,72 +182,4 @@ class ReapplyPayments extends Command
         }
     }
 
-    /**
-     * Apply payment using FIFO method
-     */
-    private function applyPaymentFIFO(Payment $payment, Contract $contract): void
-    {
-        $qoldiqSumma = $payment->summa;
-        $asosiyQarzUchun = 0;
-        $penyaUchun = 0;
-        $avans = 0;
-        $tolovSanasi = Carbon::parse($payment->tolov_sanasi);
-
-        // Get all schedules that have debt or are pending
-        $schedules = $contract->paymentSchedules()
-            ->whereIn('holat', ['tolanmagan', 'qisman_tolangan', 'kutilmoqda'])
-            ->where('qoldiq_summa', '>', 0)
-            ->orderBy('oy_raqami')
-            ->get();
-
-        foreach ($schedules as $schedule) {
-            if ($qoldiqSumma <= 0) break;
-
-            // Calculate penalty based on payment date (not today)
-            $oxirgiMuddat = Carbon::parse($schedule->oxirgi_muddat);
-
-            // Only charge penalty if deadline passed BEFORE payment date
-            if ($tolovSanasi->gt($oxirgiMuddat)) {
-                $kechikishKunlari = $oxirgiMuddat->diffInDays($tolovSanasi);
-                $penya = $schedule->qoldiq_summa * 0.004 * $kechikishKunlari;
-                $maxPenya = $schedule->qoldiq_summa * 0.5;
-                $schedule->penya_summasi = min($penya, $maxPenya);
-                $schedule->kechikish_kunlari = $kechikishKunlari;
-            }
-
-            // Pay penalty first
-            $qoldiqPenya = $schedule->penya_summasi - $schedule->tolangan_penya;
-            if ($qoldiqPenya > 0 && $qoldiqSumma > 0) {
-                $penyaTolov = min($qoldiqPenya, $qoldiqSumma);
-                $schedule->tolangan_penya += $penyaTolov;
-                $penyaUchun += $penyaTolov;
-                $qoldiqSumma -= $penyaTolov;
-            }
-
-            // Then pay principal
-            if ($schedule->qoldiq_summa > 0 && $qoldiqSumma > 0) {
-                $asosiyTolov = min($schedule->qoldiq_summa, $qoldiqSumma);
-                $schedule->tolangan_summa += $asosiyTolov;
-                $schedule->qoldiq_summa -= $asosiyTolov;
-                $asosiyQarzUchun += $asosiyTolov;
-                $qoldiqSumma -= $asosiyTolov;
-            }
-
-            $schedule->updateStatus();
-            $schedule->save();
-        }
-
-        // Remaining amount goes to avans
-        if ($qoldiqSumma > 0) {
-            $avans = $qoldiqSumma;
-            $contract->avans_balans = ($contract->avans_balans ?? 0) + $avans;
-            $contract->save();
-        }
-
-        // Update payment record
-        $payment->asosiy_qarz_uchun = $asosiyQarzUchun;
-        $payment->penya_uchun = $penyaUchun;
-        $payment->avans = $avans;
-        $payment->save();
-    }
 }

@@ -6,6 +6,7 @@ use App\Models\Contract;
 use App\Models\Lot;
 use App\Models\Payment;
 use App\Models\Tenant;
+use App\Services\PaymentApplicator;
 use App\Services\ScheduleDisplayService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -403,8 +404,8 @@ class WebController extends Controller
             })->count();
         }
 
-        // Build Payment Schedules query with filters
-        $schedulesQuery = \App\Models\PaymentSchedule::query();
+        // Build Payment Schedules query with filters (eager-load contract for live penya calc)
+        $schedulesQuery = \App\Models\PaymentSchedule::query()->with('contract');
 
         // Apply year filter to payment schedules
         if ($year) {
@@ -424,9 +425,35 @@ class WebController extends Controller
 
         // Calculate totals from filtered schedules
         $totalPlan = $filteredSchedules->sum('tolov_summasi');
-        $totalPaid = $filteredSchedules->sum('tolangan_summa');
         $totalDebt = $filteredSchedules->sum('qoldiq_summa');
-        $totalPenya = max(0, $filteredSchedules->sum('penya_summasi') - $filteredSchedules->sum('tolangan_penya'));
+
+        // "Jami To'langan" = haqiqiy tasdiqlangan to'lovlar yig'indisi (Payment.summa),
+        // bu FAKT qabul qilingan pulni aks ettiradi — schedule'dagi taqsimotga
+        // emas. Shu sababli qaytarilgan ('qaytarilgan') to'lovlar ayiriladi.
+        $paidQuery = Payment::where('holat', 'tasdiqlangan');
+        $refundQuery = Payment::where('holat', 'qaytarilgan');
+        if ($year) {
+            $paidQuery->whereYear('tolov_sanasi', $year);
+            $refundQuery->whereYear('tolov_sanasi', $year);
+        }
+        $totalPaid = max(0, (float) $paidQuery->sum('summa') - (float) abs($refundQuery->sum('summa')));
+
+        // "Jami Penya" — LIVE hisoblash: har bir qoldiqli jadval uchun
+        // penya_summasi'ni bugungi sanaga qarab (save QILINMASDAN) hisoblaymiz.
+        // Shunday qilib, hech kim lot sahifasiga kirmagan bo'lsa ham asosiy
+        // sahifada hisoblangan penya ko'rinib turadi.
+        $totalPenya = 0.0;
+        foreach ($filteredSchedules as $s) {
+            if ((float) $s->qoldiq_summa <= 0) {
+                continue;
+            }
+            $calc = (float) $s->calculatePenyaAtDate($bugun, false);
+            $unpaid = $calc - (float) $s->tolangan_penya;
+            if ($unpaid > 0) {
+                $totalPenya += $unpaid;
+            }
+        }
+        $totalPenya = max(0.0, $totalPenya);
 
         // Payment Statistics - with year filter
         $paymentsQuery = Payment::query();
@@ -1214,12 +1241,33 @@ class WebController extends Controller
             'tolov_sanasi' => 'required|date',
             'summa' => 'required|numeric|min:1',
             'tolov_usuli' => 'nullable|in:bank_otkazmasi,naqd,karta',
+            'hujjat_raqami' => 'nullable|string|max:100',
+            'izoh' => 'nullable|string',
         ]);
 
         $contract = Contract::with('paymentSchedules')->findOrFail($validated['contract_id']);
 
         if ($contract->holat !== 'faol') {
             return back()->with('error', 'Faqat faol shartnomaga to\'lov qabul qilinadi')->withInput();
+        }
+
+        // Dublicate himoyasi (server tomondan)
+        if (!$request->boolean('force')) {
+            $duplicate = Payment::where('contract_id', $contract->id)
+                ->whereDate('tolov_sanasi', $validated['tolov_sanasi'])
+                ->where('summa', $validated['summa'])
+                ->where('holat', 'tasdiqlangan')
+                ->first();
+            if ($duplicate) {
+                return back()
+                    ->with('error', sprintf(
+                        "Ushbu shartnoma uchun %s sanasida %s so'm to'lov (№ %s) allaqachon mavjud. Takror kiritish uchun 'Takror saqlash' tugmasini bosing.",
+                        \Carbon\Carbon::parse($duplicate->tolov_sanasi)->format('d.m.Y'),
+                        number_format((float) $duplicate->summa, 0, '.', ' '),
+                        $duplicate->tolov_raqami
+                    ))
+                    ->withInput();
+            }
         }
 
         DB::beginTransaction();
@@ -1232,12 +1280,13 @@ class WebController extends Controller
                 'tolov_sanasi' => $validated['tolov_sanasi'],
                 'summa' => $validated['summa'],
                 'tolov_usuli' => $validated['tolov_usuli'] ?? 'bank_otkazmasi',
+                'hujjat_raqami' => $validated['hujjat_raqami'] ?? null,
+                'izoh' => $validated['izoh'] ?? null,
                 'holat' => 'tasdiqlangan',
                 'tasdiqlangan_sana' => now(),
             ]);
 
-            // Apply FIFO payment
-            $this->applyPaymentFIFO($payment, $contract);
+            app(PaymentApplicator::class)->apply($payment, $contract);
 
             DB::commit();
             return redirect()->route('registry.lots.show', $contract->lot)->with('success', 'To\'lov muvaffaqiyatli qabul qilindi');
@@ -1247,47 +1296,25 @@ class WebController extends Controller
         }
     }
 
-    private function applyPaymentFIFO(Payment $payment, Contract $contract): void
+    /**
+     * Tasdiqlangan to'lovni bekor qilish (qaytarilgan holatiga o'tkazish).
+     *
+     * `Api\PaymentController::cancel` bilan bir xil ichki logikani chaqiramiz,
+     * lekin web marshruti orqali redirect qaytaramiz.
+     */
+    public function paymentsCancel(Request $request, Payment $payment)
     {
-        $qoldiqSumma = $payment->summa;
-        $asosiyQarzUchun = 0;
-        $penyaUchun = 0;
-
-        $schedules = $contract->paymentSchedules()
-            ->whereIn('holat', ['tolanmagan', 'qisman_tolangan', 'kutilmoqda'])
-            ->orderBy('oy_raqami')
-            ->get();
-
-        foreach ($schedules as $schedule) {
-            if ($qoldiqSumma <= 0) break;
-
-            $schedule->calculatePenya();
-
-            // Pay penalty first
-            $qoldiqPenya = $schedule->penya_summasi - $schedule->tolangan_penya;
-            if ($qoldiqPenya > 0 && $qoldiqSumma > 0) {
-                $penyaTolov = min($qoldiqPenya, $qoldiqSumma);
-                $schedule->tolangan_penya += $penyaTolov;
-                $penyaUchun += $penyaTolov;
-                $qoldiqSumma -= $penyaTolov;
-            }
-
-            // Then pay principal
-            if ($schedule->qoldiq_summa > 0 && $qoldiqSumma > 0) {
-                $asosiyTolov = min($schedule->qoldiq_summa, $qoldiqSumma);
-                $schedule->tolangan_summa += $asosiyTolov;
-                $schedule->qoldiq_summa -= $asosiyTolov;
-                $asosiyQarzUchun += $asosiyTolov;
-                $qoldiqSumma -= $asosiyTolov;
-            }
-
-            $schedule->updateStatus();
-            $schedule->save();
+        if ($payment->holat !== 'tasdiqlangan') {
+            return back()->with('error', 'Faqat tasdiqlangan to\'lovni bekor qilish mumkin');
         }
 
-        $payment->asosiy_qarz_uchun = $asosiyQarzUchun;
-        $payment->penya_uchun = $penyaUchun;
-        $payment->save();
+        try {
+            app(\App\Http\Controllers\Api\PaymentController::class, ['applicator' => app(PaymentApplicator::class)])
+                ->cancel($payment);
+            return back()->with('success', "To'lov №{$payment->tolov_raqami} bekor qilindi");
+        } catch (\Throwable $e) {
+            return back()->with('error', 'Xatolik: ' . $e->getMessage());
+        }
     }
 
     // ==================== IMPORT STATISTICS ====================

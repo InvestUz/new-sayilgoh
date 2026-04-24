@@ -46,8 +46,13 @@ Route::prefix('registry')->group(function () {
     Route::put('/contracts/{contract}', [WebController::class, 'contractsUpdate'])->name('registry.contracts.update');
 
     // Payments CRUD
+    // (Muhim) Yaratish endi asosan lot sahifasidagi modal orqali amalga oshiriladi.
+    // Ikki kirish nuqtasi saqlanadi, lekin ikkalasi ham YAGONA PaymentApplicator
+    // va dublicate-guard orqali ishlaydi.
+    Route::get('/payments', [WebController::class, 'paymentsIndex'])->name('registry.payments.index');
     Route::get('/payments/create', [WebController::class, 'paymentsCreate'])->name('registry.payments.create');
     Route::post('/payments', [WebController::class, 'paymentsStore'])->name('registry.payments.store');
+    Route::post('/payments/{payment}/cancel', [WebController::class, 'paymentsCancel'])->name('registry.payments.cancel');
 
     // Penalty Calculator & Notifications (Bildirg'inoma)
     Route::get('/contracts/{contract}/penalty-calculator', [PenaltyController::class, 'calculatorPage'])->name('registry.contracts.penalty-calculator');

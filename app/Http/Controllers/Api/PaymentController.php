@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Payment;
 use App\Models\Contract;
 use App\Models\PaymentSchedule;
+use App\Services\PaymentApplicator;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Carbon\Carbon;
@@ -16,6 +17,10 @@ use Illuminate\Support\Facades\DB;
  */
 class PaymentController extends Controller
 {
+    public function __construct(private PaymentApplicator $applicator)
+    {
+    }
+
     /**
      * Barcha to'lovlar ro'yxati
      */
@@ -50,8 +55,20 @@ class PaymentController extends Controller
     /**
      * Yangi to'lov qabul qilish
      *
-     * MUHIM: To'lov FIFO tartibida eng eski qarzga qo'llanadi
-     * Tartib: 1) Penya 2) Asosiy qarz (eng eski oydan boshlab)
+     * MUHIM: To'lov FIFO tartibida eng eski QARZGA qo'llanadi.
+     *
+     * QOIDA (2026-04-24 dan beri):
+     *   - Fakt to'lov to'liq ASOSIY qarzga (principal) yo'naltiriladi.
+     *   - Penya ushbu endpoint orqali AVTOMATIK yechilmaydi — u
+     *     `/api/penalty-payments` orqali alohida kiritiladi.
+     *   - Natijada `tolangan_summa` = qabul qilingan haqiqiy summa, penya
+     *     esa faqat hisoblangan informatsion qiymat sifatida ko'rsatiladi.
+     *
+     * Dublicate himoyasi:
+     *   - Agar xuddi shu (contract_id, tolov_sanasi, summa) bilan tasdiqlangan
+     *     to'lov mavjud bo'lsa yoki `hujjat_raqami` takrorlansa, 409 qaytariladi.
+     *     Foydalanuvchi bilib turib takror saqlamoqchi bo'lsa, so'rovga
+     *     `force: true` bayrog'ini qo'shadi.
      */
     public function store(Request $request): JsonResponse
     {
@@ -61,7 +78,7 @@ class PaymentController extends Controller
                 'tolov_sanasi' => 'required|date',
                 'summa' => 'required|numeric|min:1',
                 'tolov_usuli' => 'sometimes|in:bank_otkazmasi,naqd,karta,onlayn',
-                'hujjat_raqami' => 'nullable|string',
+                'hujjat_raqami' => 'nullable|string|max:100',
                 'izoh' => 'nullable|string',
             ]);
 
@@ -74,6 +91,37 @@ class PaymentController extends Controller
                     'success' => false,
                     'message' => 'Faqat faol shartnomaga to\'lov qabul qilinadi'
                 ], 422);
+            }
+
+            // ---------- DUBLICATE GUARD ----------
+            $force = $request->boolean('force');
+            if (!$force) {
+                $duplicate = $this->findPotentialDuplicate(
+                    $contract->id,
+                    $validated['tolov_sanasi'],
+                    (float) $validated['summa'],
+                    $validated['hujjat_raqami'] ?? null
+                );
+                if ($duplicate) {
+                    return response()->json([
+                        'success' => false,
+                        'duplicate' => true,
+                        'code' => 'DUPLICATE_SUSPECTED',
+                        'existing' => [
+                            'id' => $duplicate->id,
+                            'tolov_raqami' => $duplicate->tolov_raqami,
+                            'tolov_sanasi' => $duplicate->tolov_sanasi,
+                            'summa' => $duplicate->summa,
+                            'hujjat_raqami' => $duplicate->hujjat_raqami,
+                        ],
+                        'message' => sprintf(
+                            "Shu shartnoma uchun %s sanasida %s so'm to'lov (№ %s) allaqachon mavjud. Rostdan takror kiritmoqchimisiz?",
+                            \Carbon\Carbon::parse($duplicate->tolov_sanasi)->format('d.m.Y'),
+                            number_format((float) $duplicate->summa, 0, '.', ' '),
+                            $duplicate->tolov_raqami
+                        ),
+                    ], 409);
+                }
             }
 
             DB::beginTransaction();
@@ -94,8 +142,8 @@ class PaymentController extends Controller
                 'tasdiqlangan_sana' => now(),
             ]);
 
-            // To'lovni qo'llash (FIFO tartibida)
-            $applicationResult = $this->applyPaymentFIFO($payment, $contract);
+            // To'lovni qo'llash (FIFO tartibida, principal-only) — yagona markaz
+            $applicationResult = $this->applicator->apply($payment, $contract);
 
             DB::commit();
 
@@ -122,100 +170,35 @@ class PaymentController extends Controller
     }
 
     /**
-     * FIFO tartibida to'lovni qo'llash
+     * Shubhali dublikatni qidirish.
      *
-     * MUHIM: To'lov faqat TO'LOV SANASIGA QARAB qo'llanadi:
-     * - Penya: faqat oxirgi_muddat < tolov_sanasi bo'lgan oylarga
-     * - Qarz: faqat muddati o'tgan oylarga
-     * - Qoldiq: avans (oldindan to'lov) sifatida saqlanadi
-     *
-     * Qoida (Shartnomaga binoan):
-     * 1. Avval chiqimlar (pochta, sud xarajatlari)
-     * 2. Penya va jarima
-     * 3. Muddati o'tgan ijara to'lovi
-     * 4. Qoldiq = Avans (credit balance)
+     * Qoidalar:
+     *   1) Xuddi shu shartnoma + sana + summa + tasdiqlangan holat mavjudmi.
+     *   2) Agar hujjat_raqami yuborilgan bo'lsa, shu shartnoma uchun aynan
+     *      shunday raqam bilan tasdiqlangan to'lov bormi.
      */
-    private function applyPaymentFIFO(Payment $payment, Contract $contract): array
+    private function findPotentialDuplicate(int $contractId, string $tolovSanasi, float $summa, ?string $hujjatRaqami): ?Payment
     {
-        $qoldiqSumma = $payment->summa;
-        $tolovSanasi = \Carbon\Carbon::parse($payment->tolov_sanasi);
+        $bySameDayAmount = Payment::where('contract_id', $contractId)
+            ->whereDate('tolov_sanasi', $tolovSanasi)
+            ->where('summa', $summa)
+            ->where('holat', 'tasdiqlangan')
+            ->latest('id')
+            ->first();
 
-        $result = [
-            'jami_summa' => $payment->summa,
-            'penya_uchun' => 0,
-            'asosiy_qarz_uchun' => 0,
-            'avans' => 0,
-            'qoldiq' => 0,
-            'qoplangan_oylar' => [],
-        ];
-
-        // Faqat TO'LOV SANASIGA QADAR muddati o'tgan oylarni olish
-        // Use COALESCE to consider custom deadline if set
-        $schedules = $contract->paymentSchedules()
-            ->whereRaw('COALESCE(custom_oxirgi_muddat, oxirgi_muddat) < ?', [$tolovSanasi])
-            ->whereIn('holat', ['tolanmagan', 'qisman_tolangan'])
-            ->orderBy('oy_raqami')
-            ->get();
-
-        foreach ($schedules as $schedule) {
-            if ($qoldiqSumma <= 0) break;
-
-            // Penyani to'lov sanasiga nisbatan hisoblash
-            $schedule->calculatePenyaAtDate($tolovSanasi);
-
-            $oyInfo = [
-                'oy_raqami' => $schedule->oy_raqami,
-                'davr' => $schedule->davr_nomi,
-                'oldingi_qoldiq' => $schedule->qoldiq_summa,
-                'oldingi_penya' => $schedule->qoldiq_penya,
-            ];
-
-            // 1. Avval penyani to'lash
-            $qoldiqPenya = $schedule->penya_summasi - $schedule->tolangan_penya;
-            if ($qoldiqPenya > 0 && $qoldiqSumma > 0) {
-                $penyaTolov = min($qoldiqPenya, $qoldiqSumma);
-                $schedule->tolangan_penya += $penyaTolov;
-                $result['penya_uchun'] += $penyaTolov;
-                $qoldiqSumma -= $penyaTolov;
-                $oyInfo['tolangan_penya'] = $penyaTolov;
-            }
-
-            // 2. Keyin asosiy qarzni to'lash
-            if ($schedule->qoldiq_summa > 0 && $qoldiqSumma > 0) {
-                $asosiyTolov = min($schedule->qoldiq_summa, $qoldiqSumma);
-                $schedule->tolangan_summa += $asosiyTolov;
-                $schedule->qoldiq_summa -= $asosiyTolov;
-                $result['asosiy_qarz_uchun'] += $asosiyTolov;
-                $qoldiqSumma -= $asosiyTolov;
-                $oyInfo['tolangan_asosiy'] = $asosiyTolov;
-            }
-
-            // Holatni yangilash
-            $schedule->updateStatus();
-            $schedule->save();
-
-            $oyInfo['yangi_qoldiq'] = $schedule->qoldiq_summa;
-            $oyInfo['holat'] = $schedule->holat_nomi;
-            $result['qoplangan_oylar'][] = $oyInfo;
+        if ($bySameDayAmount) {
+            return $bySameDayAmount;
         }
 
-        // Qoldiq summa = Avans (oldindan to'lov)
-        $result['avans'] = $qoldiqSumma;
-        $result['qoldiq'] = 0;
-
-        // To'lov taqsimotini saqlash
-        $payment->asosiy_qarz_uchun = $result['asosiy_qarz_uchun'];
-        $payment->penya_uchun = $result['penya_uchun'];
-        $payment->avans = $result['avans'];
-        $payment->save();
-
-        // Shartnoma avans balansini yangilash
-        if ($result['avans'] > 0) {
-            $contract->avans_balans = ($contract->avans_balans ?? 0) + $result['avans'];
-            $contract->save();
+        if ($hujjatRaqami !== null && $hujjatRaqami !== '') {
+            return Payment::where('contract_id', $contractId)
+                ->where('hujjat_raqami', $hujjatRaqami)
+                ->where('holat', 'tasdiqlangan')
+                ->latest('id')
+                ->first();
         }
 
-        return $result;
+        return null;
     }
 
     /**
@@ -271,32 +254,38 @@ class PaymentController extends Controller
     }
 
     /**
-     * To'lovni qaytarish (schedulelarni tiklash)
+     * To'lovni qaytarish (schedulelarni tiklash).
+     *
+     * Hozirgi siyosatda avtomatik penya yechilmaydi, shu sababli reversal
+     * asosan `asosiy_qarz_uchun` (principal) va `avans`ga ta'sir qiladi.
+     * Eski ma'lumotlar uchun mavjud `penya_uchun`ni ham qaytarish uchun
+     * legacy kod qoldirilgan.
      */
     private function reversePayment(Payment $payment): void
     {
         $contract = $payment->contract;
 
-        // Eng so'nggi to'langan oylardan qaytarish
+        // Eng so'nggi to'langan oylardan qaytarish (LIFO)
         $schedules = $contract->paymentSchedules()
-            ->where('tolangan_summa', '>', 0)
+            ->where(function ($q) {
+                $q->where('tolangan_summa', '>', 0)
+                  ->orWhere('tolangan_penya', '>', 0);
+            })
             ->orderByDesc('oy_raqami')
             ->get();
 
-        $qaytarishSumma = $payment->asosiy_qarz_uchun;
-        $qaytarishPenya = $payment->penya_uchun;
+        $qaytarishSumma = (float) $payment->asosiy_qarz_uchun;
+        $qaytarishPenya = (float) $payment->penya_uchun; // legacy (yangi to'lovlarda 0)
 
         foreach ($schedules as $schedule) {
-            // Penyani qaytarish
             if ($qaytarishPenya > 0 && $schedule->tolangan_penya > 0) {
-                $penya = min($qaytarishPenya, $schedule->tolangan_penya);
+                $penya = min($qaytarishPenya, (float) $schedule->tolangan_penya);
                 $schedule->tolangan_penya -= $penya;
                 $qaytarishPenya -= $penya;
             }
 
-            // Asosiy summani qaytarish
             if ($qaytarishSumma > 0 && $schedule->tolangan_summa > 0) {
-                $summa = min($qaytarishSumma, $schedule->tolangan_summa);
+                $summa = min($qaytarishSumma, (float) $schedule->tolangan_summa);
                 $schedule->tolangan_summa -= $summa;
                 $schedule->qoldiq_summa += $summa;
                 $qaytarishSumma -= $summa;
@@ -306,6 +295,12 @@ class PaymentController extends Controller
             $schedule->save();
 
             if ($qaytarishSumma <= 0 && $qaytarishPenya <= 0) break;
+        }
+
+        // Shartnoma avans balansidan ham qaytarib olish
+        if (((float) $payment->avans) > 0) {
+            $contract->avans_balans = max(0, ((float) ($contract->avans_balans ?? 0)) - (float) $payment->avans);
+            $contract->save();
         }
     }
 

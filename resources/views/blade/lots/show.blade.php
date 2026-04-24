@@ -68,9 +68,9 @@ function formatLotSum($num) {
             <div class="absolute top-4 right-4 w-10 h-10 bg-green-500/10 rounded-lg flex items-center justify-center">
                 <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
             </div>
-            <p class="text-xs text-slate-400 uppercase tracking-wide font-medium">TO'LANGAN</p>
+            <p class="text-xs text-slate-400 uppercase tracking-wide font-medium">TO'LANGAN (FAKT)</p>
             <p class="text-4xl font-bold text-green-400 mt-3">{!! formatLotSum($stats['tolangan']) !!}</p>
-            <p class="text-xs text-slate-500 mt-4">Fakt tushum</p>
+            <p class="text-xs text-slate-500 mt-4">Kassaga tushgan sof summa<br><span class="text-slate-600">(penyadan yechilmagan)</span></p>
         </div>
 
         <!-- Qoldiq -->
@@ -88,9 +88,9 @@ function formatLotSum($num) {
             <div class="absolute top-4 right-4 w-10 h-10 bg-amber-500/10 rounded-lg flex items-center justify-center">
                 <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
             </div>
-            <p class="text-xs text-slate-400 uppercase tracking-wide font-medium">PENYA</p>
+            <p class="text-xs text-slate-400 uppercase tracking-wide font-medium">PENYA (HISOBLANGAN)</p>
             <p class="text-4xl font-bold {{ $stats['penya'] > 0 ? 'text-amber-400' : 'text-white' }} mt-3">{!! formatLotSum($stats['penya']) !!}</p>
-            <p class="text-xs text-slate-500 mt-4">Kechikish uchun jarima</p>
+            <p class="text-xs text-slate-500 mt-4">Kechikish jarimasi<br><span class="text-slate-600">(informatsion, alohida to'lanadi)</span></p>
         </div>
     </div>
 
@@ -912,18 +912,34 @@ function formatLotSum($num) {
             <table class="w-full text-xs">
                 <thead class="bg-slate-700/50 text-slate-300">
                     <tr>
-                        <th class="border border-slate-600 px-3 py-1.5 text-left">Sana</th>
-                        <th class="border border-slate-600 px-3 py-1.5 text-right">Summa</th>
-                        <th class="border border-slate-600 px-3 py-1.5 text-center">Turi</th>
+                        <th class="border border-slate-600 px-2 py-1.5 text-left">#</th>
+                        <th class="border border-slate-600 px-2 py-1.5 text-left">Sana</th>
+                        <th class="border border-slate-600 px-2 py-1.5 text-right">Summa (fakt)</th>
+                        <th class="border border-slate-600 px-2 py-1.5 text-right">Asosiyga</th>
+                        <th class="border border-slate-600 px-2 py-1.5 text-right">Avansga</th>
+                        <th class="border border-slate-600 px-2 py-1.5 text-center">Turi</th>
+                        <th class="border border-slate-600 px-2 py-1.5 text-left">Hujjat</th>
+                        <th class="border border-slate-600 px-2 py-1.5 text-center">Amal</th>
                     </tr>
                 </thead>
                 <tbody class="text-slate-200">
-                    @foreach($approvedPayments->sortByDesc('tolov_sanasi')->take(20) as $payment)
+                    @foreach($approvedPayments->sortByDesc('tolov_sanasi')->take(50) as $payment)
                     @php $paymentDate = \Carbon\Carbon::parse($payment->tolov_sanasi); @endphp
                     <tr class="hover:bg-slate-700/30">
-                        <td class="border border-slate-600 px-3 py-1.5 text-white font-medium">{{ $paymentDate->format('d.m.Y') }}</td>
-                        <td class="border border-slate-600 px-3 py-1.5 text-right text-emerald-400 font-bold">+{{ number_format($payment->summa, 0, '', ' ') }}</td>
-                        <td class="border border-slate-600 px-3 py-1.5 text-center text-slate-400">{{ ['naqd' => 'Naqd', 'plastik' => 'Karta', 'bank' => 'Bank', 'bank_otkazmasi' => 'Bank', 'onlayn' => 'Onlayn'][$payment->tolov_usuli] ?? 'Bank' }}</td>
+                        <td class="border border-slate-600 px-2 py-1.5 text-slate-400 font-mono">{{ $payment->tolov_raqami }}</td>
+                        <td class="border border-slate-600 px-2 py-1.5 text-white font-medium whitespace-nowrap">{{ $paymentDate->format('d.m.Y') }}</td>
+                        <td class="border border-slate-600 px-2 py-1.5 text-right text-emerald-400 font-bold">+{{ number_format($payment->summa, 0, '', ' ') }}</td>
+                        <td class="border border-slate-600 px-2 py-1.5 text-right text-slate-300">{{ number_format((float) $payment->asosiy_qarz_uchun, 0, '', ' ') }}</td>
+                        <td class="border border-slate-600 px-2 py-1.5 text-right text-blue-300">{{ number_format((float) $payment->avans, 0, '', ' ') }}</td>
+                        <td class="border border-slate-600 px-2 py-1.5 text-center text-slate-400">{{ ['naqd' => 'Naqd', 'plastik' => 'Karta', 'bank' => 'Bank', 'bank_otkazmasi' => 'Bank', 'karta' => 'Karta', 'onlayn' => 'Onlayn'][$payment->tolov_usuli] ?? 'Bank' }}</td>
+                        <td class="border border-slate-600 px-2 py-1.5 text-slate-400 text-[11px]" title="{{ $payment->izoh }}">{{ \Illuminate\Support\Str::limit($payment->hujjat_raqami ?? '-', 20) }}</td>
+                        <td class="border border-slate-600 px-2 py-1.5 text-center">
+                            <button type="button"
+                                @click="cancelPayment({{ $payment->id }}, '{{ $payment->tolov_raqami }}', {{ $payment->summa }})"
+                                class="px-2 py-0.5 text-[10px] rounded bg-red-500/20 text-red-300 hover:bg-red-500/40 border border-red-500/50">
+                                Bekor qilish
+                            </button>
+                        </td>
                     </tr>
                     @endforeach
                 </tbody>
@@ -1001,18 +1017,21 @@ function formatLotSum($num) {
     </div>
     @endif
 
-    <!-- Payment Modal (Simplified) -->
-    <div x-show="showPaymentModal" x-cloak class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" @click.self="showPaymentModal=false">
-        <div class="bg-white rounded-lg w-full max-w-md">
+    <!-- Payment Modal (2-step: Form → Confirmation) -->
+    <div x-show="showPaymentModal" x-cloak class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" @click.self="showPaymentModal=false; paymentStep='form'; duplicateWarning=null;">
+        <div class="bg-white rounded-lg w-full max-w-md shadow-2xl">
             <div class="px-4 py-3 border-b border-gray-200 flex justify-between items-center bg-gray-50">
-                <h3 class="font-bold text-gray-900">To'lov qilish</h3>
-                <button @click="showPaymentModal=false" class="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
+                <h3 class="font-bold text-gray-900">
+                    <span x-show="paymentStep==='form'">To'lov qilish</span>
+                    <span x-show="paymentStep==='confirm'">Tasdiqlang</span>
+                </h3>
+                <button @click="showPaymentModal=false; paymentStep='form'; duplicateWarning=null;" class="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
             </div>
 
             <!-- Current Debt Summary -->
             <div class="px-4 py-3 bg-red-50 border-b border-red-100">
                 <div class="flex justify-between items-center">
-                    <span class="text-sm text-red-700">Joriy qarz:</span>
+                    <span class="text-sm text-red-700">Joriy qarz (asosiy):</span>
                     <span class="text-lg font-bold text-red-700">{{ number_format($grandDebt, 0, ',', ' ') }}</span>
                 </div>
                 @if($grandOverdue > 0)
@@ -1023,14 +1042,18 @@ function formatLotSum($num) {
                 @endif
                 @if($grandPenya > 0)
                 <div class="flex justify-between items-center mt-1">
-                    <span class="text-xs text-amber-600">Penya:</span>
+                    <span class="text-xs text-amber-600">Penya (hisoblangan, informatsion):</span>
                     <span class="text-sm font-medium text-amber-600">{{ number_format($grandPenya, 0, ',', ' ') }}</span>
                 </div>
                 @endif
+                <div class="mt-2 pt-2 border-t border-red-200 text-[11px] text-gray-500 leading-tight">
+                    Diqqat: kiritilgan fakt to'lov TO'LIQ asosiy qarzga yo'naltiriladi.
+                    Penya undan yechilmaydi — u alohida hisoblanadi va alohida to'lanadi.
+                </div>
             </div>
 
-            <form @submit.prevent="submitPayment" class="p-4 space-y-4">
-                <!-- Quick Amount Buttons -->
+            <!-- STEP 1: FORM -->
+            <form x-show="paymentStep==='form'" @submit.prevent="prepareConfirmation" class="p-4 space-y-4">
                 <div>
                     <label class="block text-xs text-gray-500 mb-2">Tezkor summa:</label>
                     <div class="grid grid-cols-3 gap-2">
@@ -1046,8 +1069,8 @@ function formatLotSum($num) {
                 </div>
 
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Summa</label>
-                    <input type="number" step="any" x-model="paymentForm.summa" class="w-full border border-gray-300 rounded px-3 py-2 text-lg font-bold" required placeholder="0">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Summa (so'm)</label>
+                    <input type="number" step="any" min="1" x-model="paymentForm.summa" class="w-full border border-gray-300 rounded px-3 py-2 text-lg font-bold" required placeholder="0">
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                     <div>
@@ -1056,18 +1079,53 @@ function formatLotSum($num) {
                     </div>
                     <div>
                         <label class="block text-sm text-gray-600 mb-1">Turi</label>
-                        <select x-model="paymentForm.tolov_turi" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
-                            <option value="bank">Bank o'tkazmasi</option>
+                        <select x-model="paymentForm.tolov_usuli" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                            <option value="bank_otkazmasi">Bank o'tkazmasi</option>
                             <option value="naqd">Naqd</option>
-                            <option value="plastik">Plastik</option>
+                            <option value="karta">Plastik karta</option>
+                            <option value="onlayn">Onlayn</option>
                         </select>
                     </div>
                 </div>
-                <button type="submit" class="w-full py-3 bg-blue-600 text-white rounded font-bold text-sm hover:bg-blue-700" :disabled="loading">
-                    <span x-show="!loading">To'lovni saqlash</span>
-                    <span x-show="loading">Yuklanmoqda...</span>
+                <div>
+                    <label class="block text-sm text-gray-600 mb-1">Hujjat raqami <span class="text-gray-400">(ixtiyoriy, dublicate himoyasi uchun)</span></label>
+                    <input type="text" x-model="paymentForm.hujjat_raqami" maxlength="100" class="w-full border border-gray-300 rounded px-3 py-2 text-sm" placeholder="masalan: T-03-7501986">
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-600 mb-1">Izoh <span class="text-gray-400">(ixtiyoriy)</span></label>
+                    <textarea x-model="paymentForm.izoh" rows="2" class="w-full border border-gray-300 rounded px-3 py-2 text-sm"></textarea>
+                </div>
+                <button type="submit" class="w-full py-3 bg-blue-600 text-white rounded font-bold text-sm hover:bg-blue-700">
+                    Davom etish →
                 </button>
             </form>
+
+            <!-- STEP 2: CONFIRMATION -->
+            <div x-show="paymentStep==='confirm'" class="p-4 space-y-3">
+                <div class="bg-blue-50 border border-blue-200 rounded p-3 space-y-1.5 text-sm">
+                    <div class="flex justify-between"><span class="text-gray-600">Summa:</span><b class="text-blue-800" x-text="formatMoney(paymentForm.summa) + ' so\'m'"></b></div>
+                    <div class="flex justify-between"><span class="text-gray-600">Sana:</span><b x-text="paymentForm.tolov_sanasi"></b></div>
+                    <div class="flex justify-between"><span class="text-gray-600">Turi:</span><b x-text="paymentUsuliLabel(paymentForm.tolov_usuli)"></b></div>
+                    <div class="flex justify-between" x-show="paymentForm.hujjat_raqami"><span class="text-gray-600">Hujjat raqami:</span><b x-text="paymentForm.hujjat_raqami"></b></div>
+                </div>
+
+                <!-- Duplicate warning (shown only after 409 response) -->
+                <div x-show="duplicateWarning" class="bg-amber-50 border-2 border-amber-400 rounded p-3 text-sm">
+                    <div class="font-bold text-amber-900 mb-1">⚠ Shubhali dublikat topildi</div>
+                    <div class="text-amber-800 text-[13px] leading-tight" x-text="duplicateWarning?.message"></div>
+                    <div class="mt-2 text-[11px] text-amber-700">Agar bu rostdan ham yangi to'lov ekaniga ishonchingiz komil bo'lsa, "Baribir saqlash" tugmasini bosing.</div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <button type="button" @click="paymentStep='form'; duplicateWarning=null;" class="py-3 border border-gray-300 text-gray-700 rounded font-medium text-sm hover:bg-gray-50">← Orqaga</button>
+                    <button type="button" @click="submitPayment(duplicateWarning !== null)" :disabled="loading" class="py-3 text-white rounded font-bold text-sm disabled:opacity-60"
+                        :class="duplicateWarning ? 'bg-amber-600 hover:bg-amber-700' : 'bg-green-600 hover:bg-green-700'">
+                        <span x-show="!loading && !duplicateWarning">✓ Tasdiqlash va saqlash</span>
+                        <span x-show="!loading && duplicateWarning">Baribir saqlash</span>
+                        <span x-show="loading">Yuklanmoqda...</span>
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -1233,8 +1291,17 @@ function lotDetail() {
         showPaymentModal: false,
         showAddScheduleModal: false,
         loading: false,
+        paymentStep: 'form',           // 'form' | 'confirm'
+        duplicateWarning: null,        // null | { message, existing }
         @if($contract)
-        paymentForm: { contract_id: {{ $contract->id }}, summa: '', tolov_sanasi: new Date().toISOString().split('T')[0], tolov_turi: 'bank' },
+        paymentForm: {
+            contract_id: {{ $contract->id }},
+            summa: '',
+            tolov_sanasi: new Date().toISOString().split('T')[0],
+            tolov_usuli: 'bank_otkazmasi',
+            hujjat_raqami: '',
+            izoh: '',
+        },
         @else
         paymentForm: {},
         @endif
@@ -1242,12 +1309,103 @@ function lotDetail() {
         init() {},
 
         @if($contract)
-        async submitPayment() {
+        formatMoney(v) {
+            const n = parseFloat(v || 0);
+            if (!isFinite(n)) return '0';
+            return n.toLocaleString('ru-RU').replace(/,/g, ' ');
+        },
+
+        paymentUsuliLabel(code) {
+            const map = {
+                bank_otkazmasi: "Bank o'tkazmasi",
+                naqd: 'Naqd',
+                karta: 'Plastik karta',
+                onlayn: 'Onlayn',
+            };
+            return map[code] || code || '-';
+        },
+
+        prepareConfirmation() {
+            // Client-side sanity: summa > 0
+            const summa = parseFloat(this.paymentForm.summa || 0);
+            if (!(summa > 0)) {
+                alert("Iltimos, noldan katta summa kiriting.");
+                return;
+            }
+            if (!this.paymentForm.tolov_sanasi) {
+                alert("Iltimos, to'lov sanasini tanlang.");
+                return;
+            }
+            this.duplicateWarning = null;
+            this.paymentStep = 'confirm';
+        },
+
+        async cancelPayment(id, raqami, summa) {
+            const formatted = (parseFloat(summa) || 0).toLocaleString('ru-RU').replace(/,/g, ' ');
+            const msg = `№${raqami} (${formatted} so'm) to'lovini BEKOR QILASIZMI?\n\n`
+                + "Bekor qilingandan so'ng to'lov \"qaytarilgan\" holatiga o'tkaziladi va\n"
+                + "jadvaldagi taqsimoti teskarisiga qaytariladi. Davom etamizmi?";
+            if (!confirm(msg)) return;
+
+            try {
+                const res = await fetch(`/api/payments/${id}/cancel`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    },
+                });
+                if (res.ok) {
+                    window.location.reload();
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    alert(err.message || "Bekor qilishda xatolik yuz berdi");
+                }
+            } catch (e) {
+                alert('Tarmoq xatoligi: ' + (e?.message || e));
+            }
+        },
+
+        async submitPayment(force = false) {
             this.loading = true;
             try {
-                const res = await fetch('/api/payments', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }, body: JSON.stringify(this.paymentForm) });
-                if (res.ok) { this.showPaymentModal = false; window.location.reload(); } else { const err = await res.json(); alert(err.message || 'Xatolik'); }
-            } catch (e) { alert('Xatolik'); }
+                const payload = { ...this.paymentForm };
+                if (force) payload.force = true;
+
+                const res = await fetch('/api/payments', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    },
+                    body: JSON.stringify(payload),
+                });
+
+                if (res.status === 409) {
+                    // Duplicate suspected — show warning and stay on confirm step
+                    const data = await res.json().catch(() => ({}));
+                    this.duplicateWarning = {
+                        message: data.message || "Shubhali dublikat to'lov topildi.",
+                        existing: data.existing || null,
+                    };
+                    this.loading = false;
+                    return;
+                }
+
+                if (res.ok) {
+                    this.showPaymentModal = false;
+                    this.paymentStep = 'form';
+                    this.duplicateWarning = null;
+                    window.location.reload();
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    alert((err && err.message) ? (typeof err.message === 'string' ? err.message : JSON.stringify(err.message)) : 'Xatolik yuz berdi');
+                }
+            } catch (e) {
+                alert('Tarmoq xatoligi: ' + (e?.message || e));
+            }
             this.loading = false;
         },
 
