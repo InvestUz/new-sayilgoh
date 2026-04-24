@@ -184,8 +184,22 @@ class PaymentSchedule extends Model
     public function calculatePenyaAtDate(Carbon $tolovSanasi, bool $save = true): float
     {
         // Rule: Fully paid schedules have no new penalty
-        if ($this->holat === 'tolangan') {
-            return (float) $this->penya_summasi;
+        // Tarixiy holat: agar oldin penya to'langan bo'lsa (tolangan_penya > 0),
+        // uni saqlaymiz. Aks holda qoldiq 0 bo'lgan grafikda penya 0 bo'lishi
+        // kerak — aks holda `penya_summasi` maydoni (to'lov paytidagi
+        // informatsion hisoblash qoldig'i) ko'rsatkichlarni noto'g'ri oshiradi.
+        if ($this->holat === 'tolangan' || (float) $this->qoldiq_summa <= 0) {
+            if ((float) $this->tolangan_penya > 0) {
+                return (float) $this->penya_summasi;
+            }
+            if ((float) $this->penya_summasi !== 0.0 || (int) $this->kechikish_kunlari !== 0) {
+                $this->penya_summasi = 0;
+                $this->kechikish_kunlari = 0;
+                if ($save) {
+                    $this->save();
+                }
+            }
+            return 0.0;
         }
 
         // Rule: Expired contracts don't accumulate new penalties
@@ -332,6 +346,13 @@ class PaymentSchedule extends Model
     {
         if ($this->qoldiq_summa <= 0) {
             $this->holat = 'tolangan';
+            // Grafik to'liq to'langanda (va tarixiy penya to'lanmagan bo'lsa),
+            // ``penya_summasi`` va ``kechikish_kunlari`` maydonlari qaytadan
+            // stale informatsion qoldiqqa aylanmasligi uchun tozalanadi.
+            if ((float) $this->tolangan_penya <= 0) {
+                $this->penya_summasi = 0;
+                $this->kechikish_kunlari = 0;
+            }
         } elseif ($this->tolangan_summa > 0) {
             $this->holat = 'qisman_tolangan';
         } elseif (Carbon::parse($this->tolov_sanasi)->isPast()) {

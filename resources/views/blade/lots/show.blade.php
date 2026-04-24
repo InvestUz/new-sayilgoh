@@ -250,11 +250,15 @@ function formatLotSum($num) {
                     $periodPaid = $periodSchedules->sum('tolangan_summa');
                     $periodDebt = $periodSchedules->sum('qoldiq_summa');
 
-                    // IMPORTANT: Use effective deadline (custom or original) for overdue/penalty
+                    // Penya (jonli hisoblash): faqat hali TO'LIQ TO'LANMAGAN grafiklarni qo'shamiz.
+                    // Aks holda qoldiq 0 bo'lgan eski `penya_summasi` qiymatlari
+                    // yig'indini sun'iy ravishda oshiradi.
                     $periodPenalty = 0;
                     if (!$isContractExpired) {
-                        $periodPenalty = $periodSchedules->sum(function($s) {
-                            return ($s->penya_summasi ?? 0) - ($s->tolangan_penya ?? 0);
+                        $periodPenalty = $periodSchedules->sum(function($s) use ($bugun) {
+                            if ((float) $s->qoldiq_summa <= 0) return 0;
+                            $calc = (float) $s->calculatePenyaAtDate($bugun, false);
+                            return max(0, $calc - (float) ($s->tolangan_penya ?? 0));
                         });
                     }
                     $periodPenya = max(0, $periodPenalty);
@@ -300,10 +304,15 @@ function formatLotSum($num) {
 
         $grandDebt = max(0, $grandTotal - $grandPaid);
 
-        // Grand penalty: Don't accrue penalty after contract expiry
+        // Grand penalty (jonli): Shartnoma muddati tugamagan bo'lsa va grafik hali
+        // to'liq to'lanmagan bo'lsa, ``calculatePenyaAtDate`` orqali tekshiramiz.
         $grandPenaltyRaw = 0;
         if (!$isContractExpired) {
-            $grandPenaltyRaw = $allSchedules->sum('penya_summasi') - $allSchedules->sum('tolangan_penya');
+            $grandPenaltyRaw = $allSchedules->sum(function($s) use ($bugun) {
+                if ((float) $s->qoldiq_summa <= 0) return 0;
+                $calc = (float) $s->calculatePenyaAtDate($bugun, false);
+                return max(0, $calc - (float) ($s->tolangan_penya ?? 0));
+            });
         }
         $grandPenya = max(0, $grandPenaltyRaw);
 
