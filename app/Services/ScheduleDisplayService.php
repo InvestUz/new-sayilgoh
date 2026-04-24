@@ -95,6 +95,29 @@ class ScheduleDisplayService
             $isContractExpired
         );
 
+        // Fakt tushgan: ushbu grafik oyida real naqd tushgan to'lovlar
+        // (tolov_sanasi ayni shu yil-oyda bo'lgan tasdiqlangan to'lovlar yig'indisi).
+        // Bu qiymat FIFO taqsimotidan mustaqil — tenant fakti qaysi oyda qancha
+        // bergani shaffof ko'rinadi.
+        $faktPayments = $contract->payments
+            ->filter(function ($p) use ($schedule) {
+                if ($p->holat !== 'tasdiqlangan') return false;
+                $d = Carbon::parse($p->tolov_sanasi);
+                return $d->month == $schedule->oy && $d->year == $schedule->yil;
+            })
+            ->sortBy('tolov_sanasi')
+            ->values();
+        $faktTushgan = (float) $faktPayments->sum('summa');
+        $faktDocs = $faktPayments->map(function ($p) {
+            return [
+                'id' => $p->id,
+                'sana' => Carbon::parse($p->tolov_sanasi)->format('d.m.Y'),
+                'summa' => (float) $p->summa,
+                'hujjat' => $p->hujjat_raqami,
+                'tolov_raqami' => $p->tolov_raqami,
+            ];
+        })->all();
+
         return [
             'id' => $schedule->id,
             'month' => $schedule->oy,
@@ -104,7 +127,9 @@ class ScheduleDisplayService
 
             // Amounts
             'tolov_summasi' => $schedule->tolov_summasi,
-            'tolangan_summa' => $schedule->tolangan_summa,
+            'tolangan_summa' => $schedule->tolangan_summa,   // FIFO orqali asosiy qarzga yo'naltirilgan
+            'fakt_tushgan' => $faktTushgan,                  // shu oyda real tushgan naqd (FIFO dan mustaqil)
+            'fakt_payments' => $faktDocs,                    // tooltip uchun to'lovlar ro'yxati
             'qoldiq_summa' => $schedule->qoldiq_summa,
 
             // Dates

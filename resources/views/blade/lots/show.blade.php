@@ -553,7 +553,8 @@ function formatLotSum($num) {
                             <th class="border border-slate-600 px-2 py-1 text-left">Oy</th>
                             <th class="border border-slate-600 px-2 py-1 text-center">Muddat</th>
                             <th class="border border-slate-600 px-2 py-1 text-right">Grafik</th>
-                            <th class="border border-slate-600 px-2 py-1 text-right">To'langan</th>
+                            <th class="border border-slate-600 px-2 py-1 text-right" title="Shu oyda naqd tushgan to'lovlar yig'indisi (FIFO taqsimotidan mustaqil)">Fakt tushgan</th>
+                            <th class="border border-slate-600 px-2 py-1 text-right" title="FIFO orqali asosiy qarzga yo'naltirilgan summa">To'langan (asosiy)</th>
                             <th class="border border-slate-600 px-2 py-1 text-center">To'lov sanasi</th>
                             <th class="border border-slate-600 px-2 py-1 text-right">Qoldiq</th>
                             <th class="border border-slate-600 px-2 py-1 text-center">Kun</th>
@@ -618,6 +619,12 @@ function formatLotSum($num) {
                                     <template x-if="!editing"><span>{{ number_format($scheduleData['tolov_summasi'], 0, ',', ' ') }}</span></template>
                                     <template x-if="editing"><input type="number" x-model="form.tolov_summasi" class="w-full border border-slate-500 bg-slate-700 rounded px-1 py-0.5 text-xs text-right text-white"></template>
                                 </td>
+                                @php $ft = (float) ($scheduleData['fakt_tushgan'] ?? 0); $faktDocs = $scheduleData['fakt_payments'] ?? []; @endphp
+                                <td class="border border-slate-600 px-2 py-1 text-right {{ $ft > 0 ? 'text-emerald-400 font-semibold' : 'text-slate-500' }}"
+                                    @if($ft > 0 && count($faktDocs))
+                                        title="{{ collect($faktDocs)->map(fn($d) => $d['sana'].': +'.number_format($d['summa'],0,',',' ').($d['hujjat'] ? ' ('.$d['hujjat'].')' : ''))->implode('&#10;') }}"
+                                    @endif
+                                >{{ $ft > 0 ? '+'.number_format($ft, 0, ',', ' ') : '—' }}</td>
                                 <td class="border border-slate-600 px-2 py-1 text-right {{ $scheduleData['tolangan_summa'] > 0 ? 'text-blue-400' : 'text-slate-500' }}">{{ $scheduleData['tolangan_summa'] > 0 ? number_format($scheduleData['tolangan_summa'], 0, ',', ' ') : '—' }}</td>
                                 <td class="border border-slate-600 px-2 py-1 text-center text-slate-400">{{ $lastPaymentDate ? $lastPaymentDate->format('d.m.Y') : '—' }}</td>
                                 {{-- QOLDIQ: Only show for past months (deadline passed), hide for future months --}}
@@ -689,7 +696,8 @@ function formatLotSum($num) {
                             <th class="border border-slate-600 px-2 py-1 text-left">Oy</th>
                             <th class="border border-slate-600 px-2 py-1 text-center">Muddat</th>
                             <th class="border border-slate-600 px-2 py-1 text-right">Grafik</th>
-                            <th class="border border-slate-600 px-2 py-1 text-right">To'langan</th>
+                            <th class="border border-slate-600 px-2 py-1 text-right" title="Shu oyda naqd tushgan to'lovlar yig'indisi (FIFO taqsimotidan mustaqil)">Fakt tushgan</th>
+                            <th class="border border-slate-600 px-2 py-1 text-right" title="FIFO orqali asosiy qarzga yo'naltirilgan summa">To'langan (asosiy)</th>
                             <th class="border border-slate-600 px-2 py-1 text-center">To'lov sanasi</th>
                             <th class="border border-slate-600 px-2 py-1 text-right">Qoldiq</th>
                             <th class="border border-slate-600 px-2 py-1 text-center">Kun</th>
@@ -752,6 +760,12 @@ function formatLotSum($num) {
                                     <template x-if="!editing"><span>{{ number_format($scheduleData['tolov_summasi'], 0, ',', ' ') }}</span></template>
                                     <template x-if="editing"><input type="number" x-model="form.tolov_summasi" class="w-full border border-slate-500 bg-slate-700 rounded px-1 py-0.5 text-xs text-right text-white"></template>
                                 </td>
+                                @php $ft = (float) ($scheduleData['fakt_tushgan'] ?? 0); $faktDocs = $scheduleData['fakt_payments'] ?? []; @endphp
+                                <td class="border border-slate-600 px-2 py-1 text-right {{ $ft > 0 ? 'text-emerald-400 font-semibold' : 'text-slate-500' }}"
+                                    @if($ft > 0 && count($faktDocs))
+                                        title="{{ collect($faktDocs)->map(fn($d) => $d['sana'].': +'.number_format($d['summa'],0,',',' ').($d['hujjat'] ? ' ('.$d['hujjat'].')' : ''))->implode('&#10;') }}"
+                                    @endif
+                                >{{ $ft > 0 ? '+'.number_format($ft, 0, ',', ' ') : '—' }}</td>
                                 <td class="border border-slate-600 px-2 py-1 text-right {{ $scheduleData['tolangan_summa'] > 0 ? 'text-blue-400' : 'text-slate-500' }}">{{ $scheduleData['tolangan_summa'] > 0 ? number_format($scheduleData['tolangan_summa'], 0, ',', ' ') : '—' }}</td>
                                 <td class="border border-slate-600 px-2 py-1 text-center text-slate-400">{{ $lastPaymentDate ? $lastPaymentDate->format('d.m.Y') : '—' }}</td>
                                 {{-- QOLDIQ: Only show for past months (deadline passed), hide for future months --}}
