@@ -15,15 +15,13 @@ use Carbon\Carbon;
 /**
  * SheraliFactSeeder - Production-grade seeder for sayilgoh_fakt_cv.csv
  *
- * CSV Format (semicolon separated):
- * [0] Date/time: "27.03.2024 9:31"
- * [1] Account info: "20210000300792302016/305004780/..."
- * [2] Document number: "7084837"
- * [3] Code 1: "4"
- * [4] Code 2: "00401"
- * [5] Amount: "16 855 693,80" (space as thousand separator, comma as decimal)
- * [6] Purpose: payment description
- * [7] Lot/Contract reference: "8408626" or "21/21" - KEY COLUMN FOR MATCHING
+ * CSV Format (semicolon separated, 5 data columns + trailing empties):
+ * [0] Маблағ тушум вақти          — Date/time: "27.03.2024 9:31"
+ * [1] Тўловлар амалга оширган ҳисоб рақамлар — Account info
+ * [2] Тўловлар                    — Amount: "16 855 693,80" (space = thousand sep, comma = decimal)
+ * [3] Тўлов квитациялари          — Purpose / payment description
+ * [4] Ауксион савдоси бўйича ЛОТ рақам — Lot number (KEY COLUMN FOR MATCHING)
+ * [5..8] — empty trailing columns
  */
 class SheraliFactSeeder extends Seeder
 {
@@ -141,6 +139,7 @@ class SheraliFactSeeder extends Seeder
 
         $rowNumber = 0;
         $allRows = [];
+        $sectionMarkersSkipped = 0;
         $this->command->info('Reading and sorting CSV rows by date...');
 
         while (($row = fgetcsv($handle, 0, ';')) !== false) {
@@ -151,8 +150,15 @@ class SheraliFactSeeder extends Seeder
                 continue;
             }
 
-            // Validate minimum columns (CSV has 6 columns: 0=Date, 1=Account, 2=MFO, 3=Amount, 4=Purpose, 5=LotRef)
-            if (count($row) < 6) {
+            // Skip section marker rows like "2025 йил тўловлари;;;;;;;;" or "2026 йил тўловлари;;;;;;;;"
+            // These rows have a label in column 0 and all remaining columns empty.
+            if ($this->isSectionMarker($row)) {
+                $sectionMarkersSkipped++;
+                continue;
+            }
+
+            // Validate minimum columns (CSV has 5 data columns: 0=Date, 1=Account, 2=Amount, 3=Purpose, 4=LotRef)
+            if (count($row) < 5) {
                 $this->skipped[] = [
                     'row' => $rowNumber,
                     'reason' => 'Insufficient columns: ' . count($row),
@@ -169,6 +175,10 @@ class SheraliFactSeeder extends Seeder
                 'data' => $row,
                 'date' => $date,
             ];
+        }
+
+        if ($sectionMarkersSkipped > 0) {
+            $this->command->info("Skipped {$sectionMarkersSkipped} section marker row(s) (e.g. 'YYYY йил тўловлари')");
         }
 
         fclose($handle);
@@ -199,13 +209,19 @@ class SheraliFactSeeder extends Seeder
     private function processRow(array $row, int $rowNumber): void
     {
         // Parse row data based on sayilgoh_fakt_cv.csv format
-        // CSV Columns: 0=Date, 1=Account, 2=MFO, 3=Amount, 4=Purpose, 5=LotRef
+        // CSV Columns: 0=Date, 1=Account, 2=Amount, 3=Purpose, 4=LotRef
         $dateStr = trim($row[0] ?? '');
         $accountInfo = trim($row[1] ?? '');
-        $docNumber = trim($row[2] ?? '');  // MFO Code as doc identifier
-        $amountStr = trim($row[3] ?? '');  // Column 3 = Amount (FIXED)
-        $purpose = trim($row[4] ?? '');    // Column 4 = Purpose (FIXED)
-        $lotRef = trim($row[5] ?? '');     // Column 5 = Lot/Contract reference (FIXED)
+        $amountStr = trim($row[2] ?? '');  // Column 2 = Тўловлар (amount)
+        $purpose = trim($row[3] ?? '');    // Column 3 = Тўлов квитациялари (purpose)
+        $lotRef = trim($row[4] ?? '');     // Column 4 = ЛОТ рақам (lot number)
+
+        // Derive a stable document identifier from the purpose (e.g. "T-03-7501986")
+        // to help with duplicate detection; fall back to an empty string if not present.
+        $docNumber = '';
+        if (preg_match('/T-\d+(?:-\d+)?/i', $purpose, $m)) {
+            $docNumber = $m[0];
+        }
 
         // Parse amount
         $amount = $this->parseAmount($amountStr);
@@ -233,8 +249,9 @@ class SheraliFactSeeder extends Seeder
         $refundInfo = $this->isRefund($purpose, $accountInfo);
 
         // Generate unique key for duplicate detection
-        // Include LOT reference to avoid false duplicates when same amount paid on same day for different contracts
-        $uniqueKey = $date->format('Y-m-d') . '_' . $docNumber . '_' . $amount . '_' . $lotRef;
+        // date + amount + lotRef is specific enough to detect true duplicates without
+        // merging legitimately-repeated payments on the same day for different lots.
+        $uniqueKey = $date->format('Y-m-d') . '_' . $amount . '_' . $lotRef . '_' . $docNumber;
         if (isset($this->processedPayments[$uniqueKey])) {
             $this->duplicates[] = [
                 'row' => $rowNumber,
@@ -378,95 +395,63 @@ class SheraliFactSeeder extends Seeder
 
     private function findContract(string $lotRef, string $purpose): ?Contract
     {
-        // Try to extract LOT number from purpose field first (more reliable)
+        // JOIN RULE: Match sayilgoh_fakt_cv rows to DokonlarSeeder records ONLY by lot number.
+        // Contract numbers (e.g. "SH-21") are intentionally NOT used for matching.
+
+        // Prefer the L-wrapped lot number embedded in the purpose (e.g. "L8408626L").
+        // It's the most reliable source because it's generated by the auction platform.
         $extractedLot = null;
         if (preg_match('/L(\d{6,10})L/i', $purpose, $matches)) {
             $extractedLot = $matches[1];
         }
 
-        // Use extracted LOT if found, otherwise use lotRef parameter
+        // Fall back to the dedicated lot reference column from the CSV.
         $searchRef = $extractedLot ?: $lotRef;
-
         if (empty($searchRef)) {
             return null;
         }
 
-        // Handle multiple refs (e.g., "12072339, 12072343")
+        // Handle multiple refs in one cell (e.g. "12072339, 12072343") – take the first.
         $refs = preg_split('/[,\s]+/', $searchRef);
-        $primaryRef = trim($refs[0]);
+        $primaryRef = trim($refs[0] ?? '');
 
-        // Method 1: Contract format "21/21" or "23/23"
-        if (preg_match('/^(\d+)\/\d+$/', $primaryRef, $matches)) {
-            $num = $matches[1];
-            if (isset($this->contractCache[$primaryRef])) {
-                return $this->contractCache[$primaryRef];
-            }
-            if (isset($this->contractCache['SH-' . $num])) {
-                return $this->contractCache['SH-' . $num];
-            }
-        }
-
-        // Method 2: Lot number (numeric) - check cache first
+        // Normalize to digits only. This also turns contract-style refs like "21/21"
+        // into the numeric lot number stored by DokonlarSeeder (`preg_replace('/[^\d]/', '', ...)` → "2121").
         $numericRef = preg_replace('/[^0-9]/', '', $primaryRef);
+        if (empty($numericRef)) {
+            return null;
+        }
 
-        // Try with L wrapper (L12072321L format)
-        if ($numericRef) {
-            $wrappedRef = 'L' . $numericRef . 'L';
-            if (isset($this->lotCache[$wrappedRef])) {
-                $lot = $this->lotCache[$wrappedRef];
-                if ($lot->contracts->isNotEmpty()) {
-                    return $lot->contracts->first();
-                }
+        // 1) Lookup in the lot cache using the wrapped form (L12072321L).
+        $wrappedRef = 'L' . $numericRef . 'L';
+        if (isset($this->lotCache[$wrappedRef])) {
+            $lot = $this->lotCache[$wrappedRef];
+            if ($lot->contracts->isNotEmpty()) {
+                return $lot->contracts->first();
             }
         }
 
-        if ($numericRef && isset($this->lotCache[$numericRef])) {
+        // 2) Lookup by plain numeric lot number (most common format from DokonlarSeeder).
+        if (isset($this->lotCache[$numericRef])) {
             $lot = $this->lotCache[$numericRef];
             if ($lot->contracts->isNotEmpty()) {
                 return $lot->contracts->first();
             }
         }
 
-        // Method 3: Direct contract cache lookup
-        if (isset($this->contractCache[$numericRef])) {
-            return $this->contractCache[$numericRef];
-        }
-
-        // Method 4: Database search for lot - try both wrapped and unwrapped
-        if ($numericRef) {
-            // Try wrapped format first
-            $lot = Lot::where('lot_raqami', 'L' . $numericRef . 'L')
+        // 3) Fallback DB lookup for lots that were added after cache was built.
+        $lot = Lot::where('lot_raqami', $numericRef)
+            ->with(['contracts' => fn($q) => $q->with('tenant')])
+            ->first()
+            ?? Lot::where('lot_raqami', $wrappedRef)
                 ->with(['contracts' => fn($q) => $q->with('tenant')])
                 ->first();
 
-            if (!$lot) {
-                // Try unwrapped format
-                $lot = Lot::where('lot_raqami', $numericRef)
-                    ->with(['contracts' => fn($q) => $q->with('tenant')])
-                    ->first();
-            }
-
-            if (!$lot) {
-                // Try LIKE search
-                $lot = Lot::where('lot_raqami', 'LIKE', '%' . $numericRef . '%')
-                    ->with(['contracts' => fn($q) => $q->with('tenant')])
-                    ->first();
-            }
-
-            if ($lot && $lot->contracts->isNotEmpty()) {
-                return $lot->contracts->first();
-            }
+        if ($lot && $lot->contracts->isNotEmpty()) {
+            return $lot->contracts->first();
         }
 
-        // Method 5: Format "10.окт" etc.
-        if (preg_match('/^(\d+)\./', $primaryRef, $matches)) {
-            $num = $matches[1];
-            if (isset($this->contractCache['SH-' . $num])) {
-                return $this->contractCache['SH-' . $num];
-            }
-        }
-
-        // Do NOT auto-create missing lots - only import payments for existing lots
+        // Not matched – no lot with this number exists in DokonlarSeeder's data.
         return null;
     }
 
@@ -707,6 +692,33 @@ class SheraliFactSeeder extends Seeder
         } catch (\Exception $e) {
             return null;
         }
+    }
+
+    /**
+     * Detect section marker rows like "2025 йил тўловлари;;;;;;;;".
+     * These rows have a non-date label in the first column and no data in any other column.
+     */
+    private function isSectionMarker(array $row): bool
+    {
+        $firstCell = trim($row[0] ?? '');
+        if ($firstCell === '') {
+            return false;
+        }
+
+        // If the first cell looks like a valid date, it's a real payment row, not a marker
+        if (preg_match('/^\d{1,2}\.\d{1,2}\.\d{4}/', $firstCell)) {
+            return false;
+        }
+
+        // Ensure every other column is empty (the hallmark of a separator/section row)
+        $count = count($row);
+        for ($i = 1; $i < $count; $i++) {
+            if (trim((string)($row[$i] ?? '')) !== '') {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function displaySummary(): void

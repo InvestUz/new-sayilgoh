@@ -30,9 +30,10 @@ class SayilgohFaktSeeder extends Seeder
             if (empty(array_filter($row))) continue;
 
             try {
+                // CSV columns: 0=Date, 1=Account, 2=Amount, 3=Purpose, 4=LotRef
                 $paymentDate = trim($row[0] ?? '');
-                $amount = $this->parseAmount($row[3] ?? '0');
-                $lotNumber = trim($row[5] ?? '');
+                $amount = $this->parseAmount($row[2] ?? '0');
+                $lotNumber = trim($row[4] ?? '');
 
                 if (empty($paymentDate) || $amount <= 0 || empty($lotNumber)) {
                     $skipped++;

@@ -803,36 +803,92 @@ function formatLotSum($num) {
             $otherChanges = $schedulesWithChanges->filter(fn($s) => strpos($s->muddat_ozgarish_izoh, '+14%') === false);
         @endphp
         @if($priceIncreaseChanges->count() > 0 || $otherChanges->count() > 0)
+        @php
+            $priceIncreaseList = $priceIncreaseChanges->values();
+            $otherChangesList  = $otherChanges->values();
+            $previewLimit      = 3;
+        @endphp
         <div class="mt-4 border-t border-slate-600 pt-3 space-y-3">
-            @if($priceIncreaseChanges->count() > 0)
-            <div class="px-4 py-2 bg-amber-900/20 border border-amber-500/30 rounded-lg">
-                <h4 class="text-xs font-bold text-amber-300 mb-2 flex items-center gap-2">
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                    Narx oshishi (01.01.2026 dan)
-                </h4>
-                <div class="space-y-1.5 text-[10px] text-amber-100">
-                    @foreach($priceIncreaseChanges as $schedule)
-                        <div class="bg-slate-800/50 rounded px-2 py-1.5 border-l-2 border-amber-400">
-                            <span class="font-medium text-amber-300">{{ $schedule->oy_nomi }} {{ $schedule->yil }}:</span>
-                            <div class="ml-2 mt-0.5 text-slate-300 whitespace-pre-line font-mono text-[9px]">{{ $schedule->muddat_ozgarish_izoh }}</div>
-                        </div>
-                    @endforeach
+            @if($priceIncreaseList->count() > 0)
+            <div x-data="{ open: false }" class="bg-amber-900/20 border border-amber-500/30 rounded-lg overflow-hidden">
+                <button type="button" @click="open = !open"
+                    class="w-full px-4 py-2.5 flex items-center justify-between text-left hover:bg-amber-900/30 transition">
+                    <h4 class="text-xs font-bold text-amber-300 flex items-center gap-2">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        Narx oshishi (01.01.2026 dan)
+                        <span class="text-[10px] px-2 py-0.5 bg-amber-500/20 text-amber-200 rounded-full font-semibold">{{ $priceIncreaseList->count() }} ta oy</span>
+                    </h4>
+                    <svg :class="open ? 'rotate-180' : ''" class="w-4 h-4 text-amber-300 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+
+                {{-- Collapsed preview: first {{ $previewLimit }} months on a single compact line --}}
+                <div x-show="!open" class="px-4 pb-3">
+                    <div class="flex flex-wrap gap-1.5 text-[10px] text-amber-100">
+                        @foreach($priceIncreaseList->take($previewLimit) as $schedule)
+                            <span class="inline-flex items-center gap-1 bg-slate-800/50 rounded px-2 py-0.5 border-l-2 border-amber-400">
+                                <span class="font-medium text-amber-300">{{ $schedule->oy_nomi }} {{ $schedule->yil }}</span>
+                            </span>
+                        @endforeach
+                        @if($priceIncreaseList->count() > $previewLimit)
+                            <span class="text-amber-200/70">+{{ $priceIncreaseList->count() - $previewLimit }} ta ko'proq…</span>
+                        @endif
+                    </div>
+                </div>
+
+                {{-- Expanded full list --}}
+                <div x-show="open" x-collapse>
+                    <div class="px-4 pb-3 space-y-1.5 text-[10px] text-amber-100 max-h-80 overflow-y-auto">
+                        @foreach($priceIncreaseList as $schedule)
+                            <div class="bg-slate-800/50 rounded px-2 py-1.5 border-l-2 border-amber-400">
+                                <span class="font-medium text-amber-300">{{ $schedule->oy_nomi }} {{ $schedule->yil }}:</span>
+                                <div class="ml-2 mt-0.5 text-slate-300 whitespace-pre-line font-mono text-[9px]">{{ $schedule->muddat_ozgarish_izoh }}</div>
+                            </div>
+                        @endforeach
+                    </div>
                 </div>
             </div>
             @endif
-            @if($otherChanges->count() > 0)
-            <div class="px-4 py-2 bg-blue-900/20 border border-blue-500/30 rounded-lg">
-                <h4 class="text-xs font-bold text-blue-300 mb-2 flex items-center gap-2">
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                    Muddat o'zgarishlari tarixi
-                </h4>
-                <div class="space-y-1.5 text-[10px] text-blue-200">
-                    @foreach($otherChanges as $schedule)
-                        <div class="bg-slate-800/50 rounded px-2 py-1.5 border-l-2 border-blue-400">
-                            <span class="font-medium text-blue-300">{{ $schedule->oy_nomi }} {{ $schedule->yil }}:</span>
-                            <div class="ml-2 mt-0.5 text-slate-300 whitespace-pre-line">{{ $schedule->muddat_ozgarish_izoh }}</div>
-                        </div>
-                    @endforeach
+
+            @if($otherChangesList->count() > 0)
+            <div x-data="{ open: false }" class="bg-blue-900/20 border border-blue-500/30 rounded-lg overflow-hidden">
+                <button type="button" @click="open = !open"
+                    class="w-full px-4 py-2.5 flex items-center justify-between text-left hover:bg-blue-900/30 transition">
+                    <h4 class="text-xs font-bold text-blue-300 flex items-center gap-2">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        Muddat o'zgarishlari tarixi
+                        <span class="text-[10px] px-2 py-0.5 bg-blue-500/20 text-blue-200 rounded-full font-semibold">{{ $otherChangesList->count() }} ta yozuv</span>
+                    </h4>
+                    <svg :class="open ? 'rotate-180' : ''" class="w-4 h-4 text-blue-300 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+
+                {{-- Collapsed preview --}}
+                <div x-show="!open" class="px-4 pb-3">
+                    <div class="flex flex-wrap gap-1.5 text-[10px] text-blue-100">
+                        @foreach($otherChangesList->take($previewLimit) as $schedule)
+                            <span class="inline-flex items-center gap-1 bg-slate-800/50 rounded px-2 py-0.5 border-l-2 border-blue-400">
+                                <span class="font-medium text-blue-300">{{ $schedule->oy_nomi }} {{ $schedule->yil }}</span>
+                            </span>
+                        @endforeach
+                        @if($otherChangesList->count() > $previewLimit)
+                            <span class="text-blue-200/70">+{{ $otherChangesList->count() - $previewLimit }} ta ko'proq…</span>
+                        @endif
+                    </div>
+                </div>
+
+                {{-- Expanded full list --}}
+                <div x-show="open" x-collapse>
+                    <div class="px-4 pb-3 space-y-1.5 text-[10px] text-blue-200 max-h-80 overflow-y-auto">
+                        @foreach($otherChangesList as $schedule)
+                            <div class="bg-slate-800/50 rounded px-2 py-1.5 border-l-2 border-blue-400">
+                                <span class="font-medium text-blue-300">{{ $schedule->oy_nomi }} {{ $schedule->yil }}:</span>
+                                <div class="ml-2 mt-0.5 text-slate-300 whitespace-pre-line">{{ $schedule->muddat_ozgarish_izoh }}</div>
+                            </div>
+                        @endforeach
+                    </div>
                 </div>
             </div>
             @endif

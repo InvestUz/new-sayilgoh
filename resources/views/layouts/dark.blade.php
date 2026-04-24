@@ -5,6 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', '"POYTAXT SAYILGOHI" DUK')</title>
+    {{-- Default theme: LIGHT. Only users who explicitly chose "dark" stay dark. --}}
+    <script>
+        (function() {
+            try {
+                var saved = localStorage.getItem('theme');
+                if (saved !== 'dark') {
+                    document.documentElement.classList.add('light');
+                }
+            } catch (e) {
+                document.documentElement.classList.add('light');
+            }
+        })();
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
@@ -78,6 +91,174 @@
             .card { background: white !important; border: 1px solid #e5e7eb !important; }
             .table-dark th, .table-dark td { color: #111 !important; border-color: #e5e7eb !important; }
         }
+
+        /* ======================================================================
+           LIGHT MODE OVERRIDES
+           Activated when <html> carries the "light" class.
+           Uses high specificity + !important to defeat inline hex utility classes.
+           ====================================================================== */
+        html.light body { background: #f1f5f9 !important; color: #1e293b !important; }
+
+        html.light ::-webkit-scrollbar-track { background: #e2e8f0; }
+        html.light ::-webkit-scrollbar-thumb { background: #94a3b8; }
+        html.light ::-webkit-scrollbar-thumb:hover { background: #0891b2; }
+
+        /* Sidebar */
+        html.light aside { background: #ffffff !important; border-right-color: #e2e8f0 !important; box-shadow: 1px 0 3px rgba(15, 23, 42, 0.04); }
+        html.light aside > div:first-child { border-bottom-color: #e2e8f0 !important; }
+        html.light aside h1 { color: #0e7490 !important; }
+        html.light aside p { color: #64748b !important; }
+        html.light .sidebar-link { color: #475569; }
+        html.light .sidebar-link:hover { background: #f1f5f9; color: #0e7490; }
+        html.light .sidebar-link.active { background: rgba(8, 145, 178, 0.12); color: #0e7490; border-left-color: #0891b2; }
+        html.light aside nav > div { border-top-color: #e2e8f0 !important; }
+        html.light aside nav p { color: #94a3b8 !important; }
+
+        /* Header */
+        html.light header { background: #ffffff !important; border-bottom-color: #e2e8f0 !important; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04); }
+        html.light header h2 { color: #0f172a !important; }
+        html.light header p, html.light header span { color: #64748b !important; }
+
+        /* Flash messages keep their colored backgrounds; tint backgrounds slightly for readability */
+        html.light .bg-\[rgba\(34\,197\,94\,0\.1\)\] { background: #ecfdf5 !important; border-color: #a7f3d0 !important; }
+        html.light .bg-\[rgba\(239\,68\,68\,0\.1\)\] { background: #fef2f2 !important; border-color: #fecaca !important; }
+
+        /* Cards */
+        html.light .card { background: #ffffff !important; border: 1px solid #e2e8f0 !important; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); }
+        html.light .card-header { border-bottom-color: #e2e8f0 !important; }
+        html.light .card-title { color: #475569 !important; }
+
+        /* Stat cards */
+        html.light .stat-card { background: #ffffff !important; border: 1px solid #e2e8f0 !important; }
+        html.light .stat-card:hover { background: #f8fafc !important; border-color: #0891b2 !important; }
+        html.light .stat-label { color: #64748b !important; }
+        html.light .stat-value { color: #0f172a !important; }
+        html.light .stat-icon { color: #0891b2 !important; }
+
+        /* Tables */
+        html.light .table-dark th { background: #f8fafc !important; color: #475569 !important; border-bottom-color: #e2e8f0 !important; }
+        html.light .table-dark td { color: #1e293b !important; border-bottom-color: #f1f5f9 !important; }
+        html.light .table-dark tr:hover td { background: #f1f5f9 !important; }
+        html.light .table-dark .text-cyan { color: #0891b2 !important; }
+
+        /* Forms */
+        html.light .form-input { background: #ffffff !important; border-color: #cbd5e1 !important; color: #0f172a !important; }
+        html.light .form-input:focus { border-color: #0891b2 !important; box-shadow: 0 0 0 2px rgba(8, 145, 178, 0.15) !important; }
+        html.light .form-input::placeholder { color: #94a3b8 !important; }
+        html.light .form-label { color: #475569 !important; }
+
+        /* Buttons */
+        html.light .btn-secondary { background: #f1f5f9 !important; border-color: #cbd5e1 !important; color: #1e293b !important; }
+        html.light .btn-secondary:hover { background: #e2e8f0 !important; }
+
+        /* Badges: keep colors, soften backgrounds */
+        html.light .badge-success { background: #dcfce7; color: #15803d; }
+        html.light .badge-danger { background: #fee2e2; color: #b91c1c; }
+        html.light .badge-warning { background: #fef3c7; color: #b45309; }
+        html.light .badge-info { background: #e0f2fe; color: #0369a1; }
+
+        /* Pagination */
+        html.light .pagination a, html.light .pagination span { background: #ffffff; border-color: #e2e8f0; color: #475569; }
+        html.light .pagination a:hover { background: #f1f5f9; color: #0e7490; }
+        html.light .pagination .active span { background: rgba(8, 145, 178, 0.1); color: #0e7490; border-color: #0891b2; }
+
+        /* Generic hardcoded dark-hex utility classes used across pages */
+        html.light .bg-\[\#0a1628\] { background: #f1f5f9 !important; }
+        html.light .bg-\[\#0d1a2d\] { background: #ffffff !important; }
+        html.light .bg-\[\#132238\] { background: #ffffff !important; }
+        html.light .text-\[\#e2e8f0\] { color: #0f172a !important; }
+        html.light .text-\[\#94a3b8\] { color: #475569 !important; }
+        html.light .text-\[\#64748b\] { color: #64748b !important; }
+        html.light .text-\[\#7dd3fc\] { color: #0e7490 !important; }
+        html.light .text-\[\#38bdf8\] { color: #0891b2 !important; }
+        html.light .border-\[rgba\(56\,189\,248\,0\.1\)\] { border-color: #e2e8f0 !important; }
+        html.light .border-\[rgba\(56\,189\,248\,0\.08\)\] { border-color: #e2e8f0 !important; }
+
+        /* ---------- Tailwind slate/color utility overrides for nested pages ---------- */
+        /* Backgrounds: slate neutrals flip to white/off-white */
+        html.light .bg-slate-900,
+        html.light .bg-slate-800,
+        html.light .bg-slate-800\/80,
+        html.light .bg-slate-800\/60,
+        html.light .bg-slate-800\/50 { background-color: #ffffff !important; }
+        html.light .bg-slate-700,
+        html.light .bg-slate-700\/50,
+        html.light .bg-slate-700\/30 { background-color: #f1f5f9 !important; }
+        html.light .bg-slate-600 { background-color: #e2e8f0 !important; }
+
+        /* Text colors */
+        html.light .text-white { color: #0f172a !important; }
+        html.light .text-slate-200 { color: #1e293b !important; }
+        html.light .text-slate-300 { color: #334155 !important; }
+        html.light .text-slate-400 { color: #64748b !important; }
+        html.light .text-slate-500 { color: #94a3b8 !important; }
+        html.light .text-slate-600 { color: #cbd5e1 !important; }
+
+        /* Borders */
+        html.light .border-slate-500,
+        html.light .border-slate-600,
+        html.light .border-slate-700,
+        html.light .border-slate-700\/50 { border-color: #e2e8f0 !important; }
+        html.light .divide-slate-700\/50 > * + * { border-top-color: #e2e8f0 !important; }
+
+        /* Accent backgrounds: soften to pastels in light mode */
+        html.light .bg-blue-900\/20,
+        html.light .bg-blue-900\/30 { background-color: #eff6ff !important; }
+        html.light .bg-red-900\/10 { background-color: #fef2f2 !important; }
+        html.light .bg-red-900\/20,
+        html.light .bg-red-900\/30,
+        html.light .bg-red-900\/40 { background-color: #fee2e2 !important; }
+        html.light .bg-amber-900\/20 { background-color: #fffbeb !important; }
+        html.light .bg-green-500\/10 { background-color: #dcfce7 !important; }
+        html.light .bg-green-500\/20 { background-color: #bbf7d0 !important; }
+        html.light .bg-red-500\/10 { background-color: #fee2e2 !important; }
+        html.light .bg-amber-500\/10 { background-color: #fef3c7 !important; }
+
+        /* Accent text colors tuned for readability on light bg */
+        html.light .text-blue-300,
+        html.light .text-blue-400 { color: #1d4ed8 !important; }
+        html.light .text-green-400 { color: #15803d !important; }
+        html.light .text-emerald-400 { color: #047857 !important; }
+        html.light .text-red-400 { color: #b91c1c !important; }
+        html.light .text-red-300 { color: #991b1b !important; }
+        html.light .text-red-200,
+        html.light .text-red-100 { color: #7f1d1d !important; }
+        html.light .text-amber-400,
+        html.light .text-amber-300 { color: #b45309 !important; }
+
+        /* Semi-transparent accent borders (left stripes on cards) */
+        html.light .border-l-green-500 { border-left-color: #22c55e !important; }
+        html.light .border-l-red-500 { border-left-color: #ef4444 !important; }
+        html.light .border-l-amber-500 { border-left-color: #f59e0b !important; }
+        html.light .border-l-blue-500 { border-left-color: #3b82f6 !important; }
+
+        /* Shadow polish for cards on light surfaces */
+        html.light .bg-slate-800\/50,
+        html.light .bg-slate-800\/80 { box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); }
+
+        /* Preserve modals/toasts that explicitly use bg-white or bg-gray-*: no change needed */
+
+        /* Theme toggle button */
+        .theme-toggle {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            background: rgba(56, 189, 248, 0.08);
+            border: 1px solid rgba(56, 189, 248, 0.2);
+            color: #38bdf8;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s, border-color 0.2s, transform 0.2s;
+        }
+        .theme-toggle:hover { background: rgba(56, 189, 248, 0.18); transform: rotate(12deg); }
+        .theme-toggle svg { width: 18px; height: 18px; }
+        html.light .theme-toggle { background: #f1f5f9; border-color: #cbd5e1; color: #b45309; }
+        html.light .theme-toggle:hover { background: #e2e8f0; }
+        html.light .theme-toggle .icon-sun { display: none; }
+        .theme-toggle .icon-moon { display: none; }
+        html.light .theme-toggle .icon-moon { display: inline; }
         </style>
     @yield('styles')
 </head>
@@ -130,6 +311,21 @@
                     </div>
                     <div class="flex items-center gap-3">
                         <span class="text-xs text-[#64748b]">{{ date('d.m.Y H:i') }}</span>
+                        <button
+                            type="button"
+                            class="theme-toggle"
+                            onclick="toggleTheme()"
+                            title="Mavzu almashtirish / Toggle theme"
+                            aria-label="Mavzu almashtirish">
+                            <svg class="icon-sun" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                                    d="M12 3v1.5M12 19.5V21M4.22 4.22l1.06 1.06M18.72 18.72l1.06 1.06M3 12h1.5M19.5 12H21M4.22 19.78l1.06-1.06M18.72 5.28l1.06-1.06M16.5 12a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/>
+                            </svg>
+                            <svg class="icon-moon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                                    d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
+                            </svg>
+                        </button>
                         @yield('header-actions')
                     </div>
                 </div>
@@ -159,6 +355,15 @@
             </div>
         </main>
     </div>
+    <script>
+        function toggleTheme() {
+            var root = document.documentElement;
+            var isLight = root.classList.toggle('light');
+            try {
+                localStorage.setItem('theme', isLight ? 'light' : 'dark');
+            } catch (e) {}
+        }
+    </script>
     @yield('scripts')
 </body>
 </html>

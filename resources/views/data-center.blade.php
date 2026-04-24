@@ -4,6 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>"POYTAXT SAYILGOHI" DUK</title>
+    {{-- Default theme: LIGHT. Only users who explicitly chose "dark" stay dark. --}}
+    <script>
+        (function() {
+            try {
+                if (localStorage.getItem('theme') !== 'dark') {
+                    document.documentElement.classList.add('light');
+                }
+            } catch (e) {
+                document.documentElement.classList.add('light');
+            }
+        })();
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
@@ -210,6 +222,79 @@
         /* Chart container fix */
         .chart-container { height: 140px; position: relative; display: block; }
         .chart-container canvas { width: 100% !important; height: 100% !important; }
+
+        /* Theme toggle button */
+        .theme-toggle {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 28px; height: 28px; border-radius: 6px;
+            background: rgba(56, 189, 248, 0.1);
+            border: 1px solid rgba(56, 189, 248, 0.25);
+            color: #38bdf8; cursor: pointer;
+            transition: background 0.2s, color 0.2s, border-color 0.2s, transform 0.2s;
+        }
+        .theme-toggle:hover { background: rgba(56, 189, 248, 0.2); transform: rotate(15deg); }
+        .theme-toggle svg { width: 14px; height: 14px; }
+        .theme-toggle .icon-moon { display: none; }
+
+        /* ======================================================================
+           LIGHT MODE — activated by html.light
+           ====================================================================== */
+        html.light body { background: #f1f5f9; color: #0f172a; }
+        html.light .header { border-bottom-color: #e2e8f0; }
+        html.light .header h1 { color: #0e7490; }
+        html.light .header-date { color: #64748b; }
+        html.light .status-badge { background: #dcfce7; color: #15803d; }
+
+        /* Filters bar */
+        html.light .filters-bar { background: #ffffff; border-color: #e2e8f0; }
+        html.light .filter-label { color: #64748b; }
+        html.light .filter-select { background: #ffffff; border-color: #cbd5e1; color: #0f172a; }
+        html.light .filter-select:focus { border-color: #0891b2; }
+        html.light .filter-select option { background: #ffffff; color: #0f172a; }
+        html.light .filter-btn.secondary { background: #e2e8f0; border-color: #cbd5e1; color: #0f172a; }
+        html.light .quick-link { background: #ffffff; border-color: #e2e8f0; color: #475569; }
+        html.light .quick-link:hover { background: #f1f5f9; color: #0e7490; }
+
+        /* Panels */
+        html.light .panel { background: #ffffff; border-color: #e2e8f0; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); }
+        html.light .panel-title { color: #475569; border-bottom-color: #e2e8f0; }
+        html.light .panel-sub { color: #64748b; }
+
+        /* Stat cards */
+        html.light .stat-card { background: #ffffff; border-color: #e2e8f0; }
+        html.light .stat-card:hover { border-color: #0891b2; background: #f8fafc; }
+        html.light .stat-icon { color: #0891b2; }
+        html.light .stat-info h4 { color: #64748b; }
+        html.light .stat-info .val { color: #0f172a; }
+        html.light .stat-info .val.cyan { color: #0891b2; }
+
+        /* List stats */
+        html.light .list-stat { border-bottom-color: #f1f5f9; }
+        html.light .list-stat-icon { color: #0891b2; }
+        html.light .list-stat-name { color: #475569; }
+        html.light .list-stat-val { color: #0891b2; }
+        html.light .list-stat-val.white { color: #0f172a; }
+
+        /* Map */
+        html.light .map-container { background: #f8fafc; }
+        html.light .marker-label { background: #ffffff; border-color: #0891b2; color: #0f172a; }
+
+        /* Finance cards */
+        html.light .finance-card { background: #f8fafc; }
+        html.light .finance-label { color: #64748b; }
+        html.light .finance-val { color: #0f172a; }
+        html.light .finance-val span { color: #64748b; }
+        html.light .finance-sub { color: #64748b; }
+
+        /* Progress */
+        html.light .progress-name { color: #475569; }
+        html.light .progress-track { background: #e2e8f0; }
+
+        /* Theme toggle button (light) */
+        html.light .theme-toggle { background: #f1f5f9; border-color: #cbd5e1; color: #b45309; }
+        html.light .theme-toggle:hover { background: #e2e8f0; }
+        html.light .theme-toggle .icon-sun { display: none; }
+        html.light .theme-toggle .icon-moon { display: inline; }
     </style>
 </head>
 <body>
@@ -223,6 +308,21 @@
                     LIVE
                 </span>
                 <div class="header-date">{{ date('d.m.Y H:i') }} | Toshkent</div>
+                <button
+                    type="button"
+                    class="theme-toggle"
+                    onclick="toggleTheme()"
+                    title="Mavzu almashtirish / Toggle theme"
+                    aria-label="Mavzu almashtirish">
+                    <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                            d="M12 3v1.5M12 19.5V21M4.22 4.22l1.06 1.06M18.72 18.72l1.06 1.06M3 12h1.5M19.5 12H21M4.22 19.78l1.06-1.06M18.72 5.28l1.06-1.06M16.5 12a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/>
+                    </svg>
+                    <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                            d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
+                    </svg>
+                </button>
             </div>
         </div>
 
@@ -548,6 +648,12 @@
     </div>
 
     <script>
+        function toggleTheme() {
+            var root = document.documentElement;
+            var isLight = root.classList.toggle('light');
+            try { localStorage.setItem('theme', isLight ? 'light' : 'dark'); } catch (e) {}
+        }
+
         // Wait for DOM to be ready
         document.addEventListener('DOMContentLoaded', function() {
             // Style the Uzbekistan map
