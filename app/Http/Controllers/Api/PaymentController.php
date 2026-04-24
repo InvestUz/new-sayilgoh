@@ -233,10 +233,8 @@ class PaymentController extends Controller
 
         DB::beginTransaction();
         try {
-            // To'lovni qaytarish (schedulelarni yangilash)
-            $this->reversePayment($payment);
-
             $payment->update(['holat' => 'qaytarilgan']);
+            $this->rebuildContractAllocations($payment->contract);
 
             DB::commit();
 
@@ -254,53 +252,54 @@ class PaymentController extends Controller
     }
 
     /**
-     * To'lovni qaytarish (schedulelarni tiklash).
+     * Shartnoma bo'yicha to'lov taqsimlashini toza holatga qaytarish.
      *
-     * Hozirgi siyosatda avtomatik penya yechilmaydi, shu sababli reversal
-     * asosan `asosiy_qarz_uchun` (principal) va `avans`ga ta'sir qiladi.
-     * Eski ma'lumotlar uchun mavjud `penya_uchun`ni ham qaytarish uchun
-     * legacy kod qoldirilgan.
+     * Avvalgi reversal LIFO mantig'ida to'lov qaysi grafikka qo'llangani
+     * kuzatilmas edi, natijada ayrim holatlarda pul boshqa oyga qaytarilar
+     * edi. Endi quyidagi ATOMIK usulni qo'llaymiz:
+     *
+     *  1. Shartnomaning barcha grafiklari `qoldiq_summa = tolov_summasi`,
+     *     `tolangan_summa = 0`, `tolangan_penya = 0`, `penya_summasi = 0`
+     *     holatiga qaytariladi.
+     *  2. Shartnomaning `avans_balans`i 0 ga tushiriladi.
+     *  3. Barcha `tasdiqlangan` to'lovlar sana tartibida `PaymentApplicator`
+     *     orqali qaytadan qo'llaniladi. Bu matematik jihatdan kafolatlangan
+     *     to'g'ri holatni beradi.
+     *
+     * Bu usul yangi to'lov qo'shilganda ham (agar `force` bilan dublicate
+     * o'tkazilsa), bekor qilinganda ham, saralangan holatda bir xil natija
+     * beradi.
      */
-    private function reversePayment(Payment $payment): void
+    private function rebuildContractAllocations(Contract $contract): void
     {
-        $contract = $payment->contract;
+        $contract->paymentSchedules()
+            ->update([
+                'tolangan_summa'   => 0,
+                'tolangan_penya'   => 0,
+                'qoldiq_summa'     => DB::raw('tolov_summasi'),
+                'penya_summasi'    => 0,
+                'kechikish_kunlari' => 0,
+                'holat'            => 'kutilmoqda',
+            ]);
 
-        // Eng so'nggi to'langan oylardan qaytarish (LIFO)
-        $schedules = $contract->paymentSchedules()
-            ->where(function ($q) {
-                $q->where('tolangan_summa', '>', 0)
-                  ->orWhere('tolangan_penya', '>', 0);
-            })
-            ->orderByDesc('oy_raqami')
+        $contract->avans_balans = 0;
+        $contract->save();
+
+        // `tasdiqlangan` to'lovlarni sana tartibida (eng eski birinchi) qo'llash.
+        $payments = $contract->payments()
+            ->where('holat', 'tasdiqlangan')
+            ->orderBy('tolov_sanasi')
+            ->orderBy('id')
             ->get();
 
-        $qaytarishSumma = (float) $payment->asosiy_qarz_uchun;
-        $qaytarishPenya = (float) $payment->penya_uchun; // legacy (yangi to'lovlarda 0)
-
-        foreach ($schedules as $schedule) {
-            if ($qaytarishPenya > 0 && $schedule->tolangan_penya > 0) {
-                $penya = min($qaytarishPenya, (float) $schedule->tolangan_penya);
-                $schedule->tolangan_penya -= $penya;
-                $qaytarishPenya -= $penya;
-            }
-
-            if ($qaytarishSumma > 0 && $schedule->tolangan_summa > 0) {
-                $summa = min($qaytarishSumma, (float) $schedule->tolangan_summa);
-                $schedule->tolangan_summa -= $summa;
-                $schedule->qoldiq_summa += $summa;
-                $qaytarishSumma -= $summa;
-            }
-
-            $schedule->updateStatus();
-            $schedule->save();
-
-            if ($qaytarishSumma <= 0 && $qaytarishPenya <= 0) break;
-        }
-
-        // Shartnoma avans balansidan ham qaytarib olish
-        if (((float) $payment->avans) > 0) {
-            $contract->avans_balans = max(0, ((float) ($contract->avans_balans ?? 0)) - (float) $payment->avans);
-            $contract->save();
+        foreach ($payments as $p) {
+            // Eski taqsimot maydonlarini tozalash — PaymentApplicator-dagi
+            // re-entry guard ishga tushmasligi uchun.
+            $p->asosiy_qarz_uchun = 0;
+            $p->penya_uchun = 0;
+            $p->avans = 0;
+            $p->save();
+            $this->applicator->apply($p, $contract);
         }
     }
 
