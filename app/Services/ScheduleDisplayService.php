@@ -77,6 +77,9 @@ class ScheduleDisplayService
         $currentYear = $today->year;
         $isCurrentMonth = ($schedule->oy == $currentMonth && $schedule->yil == $currentYear);
 
+        // Pro-rata aniqlash (qisman birinchi oy)
+        $proRata = $this->detectProRata($schedule, $contract);
+
         // Calculate days and overdue status
         $daysData = $this->calculateDaysAndOverdue(
             $schedule,
@@ -155,7 +158,51 @@ class ScheduleDisplayService
             'can_delete' => $schedule->tolangan_summa <= 0,
             'has_custom_deadline' => !empty($schedule->custom_oxirgi_muddat),
             'muddat_ozgarish_izoh' => $schedule->muddat_ozgarish_izoh,
+
+            // Pro-rata
+            'is_pro_rata' => $proRata['is_pro_rata'],
+            'pro_rata_tooltip' => $proRata['tooltip'],
         ];
+    }
+
+    /**
+     * Birinchi qisman oyni aniqlash va tooltip hosil qilish.
+     *
+     * Pro-rata aniqlanadi: agar grafikning sanasi shartnoma boshlanish
+     * sanasiga teng bo'lsa va summa to'liq oylikdan kichik bo'lsa.
+     */
+    private function detectProRata(PaymentSchedule $schedule, Contract $contract): array
+    {
+        $boshlanish = Carbon::parse($contract->boshlanish_sanasi);
+        $tolovSanasi = Carbon::parse($schedule->tolov_sanasi);
+
+        if (!$tolovSanasi->isSameDay($boshlanish) || $boshlanish->day === 1) {
+            return ['is_pro_rata' => false, 'tooltip' => null];
+        }
+
+        $annualRent = (float) ($contract->yillik_ijara_haqi ?? $contract->shartnoma_summasi);
+        $monthlyFull = round($annualRent / 12, 2);
+        $scheduleAmount = (float) $schedule->tolov_summasi;
+
+        // To'liq oylikdan farqli bo'lsa — pro-rata
+        if (abs($scheduleAmount - $monthlyFull) < 0.5) {
+            return ['is_pro_rata' => false, 'tooltip' => null];
+        }
+
+        $daysInMonth = $boshlanish->daysInMonth;
+        $activeDays = $daysInMonth - $boshlanish->day + 1;
+
+        $tooltip = sprintf(
+            "Qisman birinchi oy (%d kun / %d): %s × %d/%d = %s",
+            $activeDays,
+            $daysInMonth,
+            number_format($monthlyFull, 2, ',', ' '),
+            $activeDays,
+            $daysInMonth,
+            number_format($scheduleAmount, 2, ',', ' ')
+        );
+
+        return ['is_pro_rata' => true, 'tooltip' => $tooltip];
     }
 
     /**
@@ -242,7 +289,11 @@ class ScheduleDisplayService
     }
 
     /**
-     * Calculate penalty for schedule
+     * Penyani ko'rsatish uchun tayyorlash.
+     *
+     * Manba: PaymentSchedule.penya_summasi (DBda saqlangan haqiqiy tarixiy
+     * qiymat). Bu yerda QAYTA hisob qilmaymiz — yo'qotmaslik kafolati
+     * `PaymentSchedule::calculatePenyaAtDate` orqali ta'minlanadi.
      */
     private function calculatePenalty(
         PaymentSchedule $schedule,
@@ -250,37 +301,12 @@ class ScheduleDisplayService
         bool $isOverdue,
         bool $isContractExpired
     ): array {
-        if ($isContractExpired || !$isOverdue || $overdueDays <= 0) {
-            return [
-                'penya_summasi' => 0,
-                'qoldiq_penya' => 0,
-            ];
-        }
-
-        // Calculate penalty on remaining balance
-        $baseAmount = $schedule->qoldiq_summa > 0
-            ? $schedule->qoldiq_summa
-            : 0;
-
-        if ($baseAmount <= 0) {
-            return [
-                'penya_summasi' => 0,
-                'qoldiq_penya' => 0,
-            ];
-        }
-
-        $penaltyRate = 0.004; // 0.4% per day
-        $rawPenalty = $baseAmount * $penaltyRate * $overdueDays;
-
-        // Cap at 50% of base amount
-        $maxPenalty = $baseAmount * 0.5;
-        $calculatedPenalty = min($rawPenalty, $maxPenalty);
-
-        $tolanganPenya = $schedule->tolangan_penya ?? 0;
-        $qoldiqPenya = max(0, $calculatedPenalty - $tolanganPenya);
+        $penyaSummasi = (float) ($schedule->penya_summasi ?? 0);
+        $tolanganPenya = (float) ($schedule->tolangan_penya ?? 0);
+        $qoldiqPenya = max(0.0, $penyaSummasi - $tolanganPenya);
 
         return [
-            'penya_summasi' => round($calculatedPenalty, 2),
+            'penya_summasi' => round($penyaSummasi, 2),
             'qoldiq_penya' => round($qoldiqPenya, 2),
         ];
     }

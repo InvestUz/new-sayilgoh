@@ -121,23 +121,6 @@ class Payment extends Model
     // ============================================
 
     /**
-     * Apply payment to contract using PenaltyCalculatorService
-     * This is called automatically by PaymentObserver when payment is approved
-     * 
-     * @deprecated Use PaymentObserver instead - this method kept for manual calls
-     */
-    public function applyToContract(): void
-    {
-        if ($this->holat !== 'tasdiqlangan') {
-            return;
-        }
-
-        // Let the service handle the payment application
-        $service = app(\App\Services\PenaltyCalculatorService::class);
-        $service->applyPayment($this);
-    }
-
-    /**
      * To'lovni yangi raqam bilan yaratish
      */
     public static function generateTolovRaqami(): string

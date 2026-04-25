@@ -558,18 +558,51 @@
             <!-- Right Column -->
             <div class="column">
                 <div class="panel">
-                    <div class="panel-title">Bu oy statistikasi</div>
+                    <div class="panel-title">Joriy oy: {{ $currentMonth['label'] }}</div>
+                    <div class="panel-sub">Shu kalendar oy bo'yicha rejalar va qarzdorlik</div>
                     <div class="list-stat">
-                        <span class="list-stat-name">To'lovlar soni</span>
-                        <span class="list-stat-val">{{ number_format($thisMonthPayments) }}</span>
+                        <span class="list-stat-name">Reja (shu oy)</span>
+                        <span class="list-stat-val white" title="{{ number_format($currentMonth['plan'], 0, '', ' ') }} so'm">
+                            {{ number_format($currentMonth['plan'] / 1000000, 1) }} mln
+                        </span>
                     </div>
                     <div class="list-stat">
-                        <span class="list-stat-name">To'lovlar summasi</span>
-                        <span class="list-stat-val green">{{ number_format($thisMonthSum / 1000000, 1) }} mln</span>
+                        <span class="list-stat-name">To'langan</span>
+                        <span class="list-stat-val green" title="{{ number_format($currentMonth['paid'], 0, '', ' ') }} so'm">
+                            {{ number_format($currentMonth['paid'] / 1000000, 1) }} mln
+                        </span>
                     </div>
                     <div class="list-stat">
-                        <span class="list-stat-name">Faol ijarachilar</span>
-                        <span class="list-stat-val">{{ number_format($activeTenants) }}</span>
+                        <span class="list-stat-name">Qarz (qoldiq)</span>
+                        <span class="list-stat-val red" title="{{ number_format($currentMonth['debt'], 0, '', ' ') }} so'm">
+                            {{ number_format($currentMonth['debt'] / 1000000, 1) }} mln
+                        </span>
+                    </div>
+                    <div class="list-stat">
+                        <span class="list-stat-name">Penya (qoldiq)</span>
+                        <span class="list-stat-val" style="color:#f59e0b" title="{{ number_format($currentMonth['penalty'], 0, '', ' ') }} so'm">
+                            {{ number_format($currentMonth['penalty'] / 1000000, 1) }} mln
+                        </span>
+                    </div>
+                    <div class="list-stat">
+                        <span class="list-stat-name">Yopilgan grafiklar</span>
+                        <span class="list-stat-val green">
+                            {{ $currentMonth['paid_count'] }} / {{ $currentMonth['total_count'] }}
+                        </span>
+                    </div>
+                    <div class="list-stat">
+                        <span class="list-stat-name">Muddati o'tgan</span>
+                        <span class="list-stat-val red">{{ $currentMonth['overdue_count'] }}</span>
+                    </div>
+                    <div class="list-stat">
+                        <span class="list-stat-name">Yig'im darajasi</span>
+                        <span class="list-stat-val">{{ $currentMonth['collection_percent'] }}%</span>
+                    </div>
+                    <div class="list-stat">
+                        <span class="list-stat-name">Bu oy fakt to'lovlar</span>
+                        <span class="list-stat-val green">
+                            {{ $thisMonthPayments }} ta · {{ number_format($thisMonthSum / 1000000, 1) }} mln
+                        </span>
                     </div>
                 </div>
 

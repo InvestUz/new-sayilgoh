@@ -254,38 +254,46 @@ class PaymentController extends Controller
     /**
      * Shartnoma bo'yicha to'lov taqsimlashini toza holatga qaytarish.
      *
-     * Avvalgi reversal LIFO mantig'ida to'lov qaysi grafikka qo'llangani
-     * kuzatilmas edi, natijada ayrim holatlarda pul boshqa oyga qaytarilar
-     * edi. Endi quyidagi ATOMIK usulni qo'llaymiz:
+     * Ikki rejim:
      *
-     *  1. Shartnomaning barcha grafiklari `qoldiq_summa = tolov_summasi`,
-     *     `tolangan_summa = 0`, `tolangan_penya = 0`, `penya_summasi = 0`
-     *     holatiga qaytariladi.
-     *  2. Shartnomaning `avans_balans`i 0 ga tushiriladi.
-     *  3. Barcha `tasdiqlangan` to'lovlar sana tartibida `PaymentApplicator`
-     *     orqali qaytadan qo'llaniladi. Bu matematik jihatdan kafolatlangan
-     *     to'g'ri holatni beradi.
+     *  STANDART (`$force = false`) — to'lovni bekor qilish kabi avtomatik
+     *  oqimlar uchun:
+     *   1. Barcha grafiklarning ASOSIY qarz maydonlari (`tolangan_summa`,
+     *      `qoldiq_summa`, `holat`) reset qilinadi.
+     *   2. PENYA tarixi (`penya_summasi`, `kechikish_kunlari`,
+     *      `tolangan_penya`) SAQLANADI — yo'qotmaslik kafolati.
+     *   3. FAKT to'lovlar FIFO orqali qaytadan tarqaladi.
+     *   4. Penya bugungi sana bo'yicha MONOTON yangilanadi
+     *      (eski qiymatdan past tushmaydi).
      *
-     * Bu usul yangi to'lov qo'shilganda ham (agar `force` bilan dublicate
-     * o'tkazilsa), bekor qilinganda ham, saralangan holatda bir xil natija
-     * beradi.
+     *  KO'CHIRILGAN (`$force = true`) — qo'lda grafikni o'zgartirgan kabi
+     *  ataylab qilingan operatsiyalar uchun:
+     *   1. Asosiy qarz maydonlari reset qilinadi.
+     *   2. Penya maydonlari (`penya_summasi`, `kechikish_kunlari`) ham
+     *      reset qilinadi (`tolangan_penya` saqlanadi — bu real to'lov).
+     *   3. FAKT to'lovlar FIFO orqali qaytadan tarqaladi.
+     *   4. Har bir grafik penyasi NOLDAN qayta hisoblanadi:
+     *        - To'lanmagan grafiklar: bugungi sana bo'yicha
+     *        - To'liq to'langan grafiklar: oxirgi to'lov sanasi bo'yicha
      */
-    private function rebuildContractAllocations(Contract $contract): void
+    private function rebuildContractAllocations(Contract $contract, bool $force = false): void
     {
-        $contract->paymentSchedules()
-            ->update([
-                'tolangan_summa'   => 0,
-                'tolangan_penya'   => 0,
-                'qoldiq_summa'     => DB::raw('tolov_summasi'),
-                'penya_summasi'    => 0,
-                'kechikish_kunlari' => 0,
-                'holat'            => 'kutilmoqda',
-            ]);
+        $resetData = [
+            'tolangan_summa' => 0,
+            'qoldiq_summa'   => DB::raw('tolov_summasi'),
+            'holat'          => 'kutilmoqda',
+        ];
+
+        if ($force) {
+            $resetData['penya_summasi'] = 0;
+            $resetData['kechikish_kunlari'] = 0;
+        }
+
+        $contract->paymentSchedules()->update($resetData);
 
         $contract->avans_balans = 0;
         $contract->save();
 
-        // `tasdiqlangan` to'lovlarni sana tartibida (eng eski birinchi) qo'llash.
         $payments = $contract->payments()
             ->where('holat', 'tasdiqlangan')
             ->orderBy('tolov_sanasi')
@@ -293,14 +301,76 @@ class PaymentController extends Controller
             ->get();
 
         foreach ($payments as $p) {
-            // Eski taqsimot maydonlarini tozalash — PaymentApplicator-dagi
-            // re-entry guard ishga tushmasligi uchun.
             $p->asosiy_qarz_uchun = 0;
             $p->penya_uchun = 0;
             $p->avans = 0;
             $p->save();
             $this->applicator->apply($p, $contract);
         }
+
+        // Penyani qayta hisoblash
+        $today = Carbon::today();
+        foreach ($contract->paymentSchedules()->get() as $schedule) {
+            if ($force) {
+                $this->recalculateSchedulePenya($schedule, $contract, $today);
+            } else {
+                $schedule->calculatePenyaAtDate($today, true);
+            }
+        }
+    }
+
+    /**
+     * Bir grafikning penyasini noldan hisoblash.
+     *
+     *  - To'lanmagan grafik (qoldiq > 0): bugungi sana bo'yicha
+     *    `calculatePenyaAtDate` chaqiriladi (force resetdan keyin
+     *    "monoton" qoidasi 0'dan boshlangani uchun toza qiymat beradi).
+     *  - To'liq to'langan grafik (qoldiq = 0): shu oydagi eng oxirgi
+     *    FAKT to'lov sanasi olinadi va deadline'dan kechikish kunlari
+     *    bo'yicha penya hisoblanadi (50% cap bilan).
+     */
+    private function recalculateSchedulePenya(
+        PaymentSchedule $schedule,
+        Contract $contract,
+        Carbon $today
+    ): void {
+        if ((float) $schedule->qoldiq_summa > 0) {
+            $schedule->calculatePenyaAtDate($today, true);
+            return;
+        }
+
+        $deadline = $schedule->custom_oxirgi_muddat
+            ? Carbon::parse($schedule->custom_oxirgi_muddat)
+            : Carbon::parse($schedule->oxirgi_muddat);
+
+        $lastPaymentInMonth = $contract->payments
+            ->where('holat', 'tasdiqlangan')
+            ->filter(function ($p) use ($schedule) {
+                $d = Carbon::parse($p->tolov_sanasi);
+                return $d->month == $schedule->oy && $d->year == $schedule->yil;
+            })
+            ->sortByDesc('tolov_sanasi')
+            ->first();
+
+        if (!$lastPaymentInMonth) {
+            return;
+        }
+
+        $payDate = Carbon::parse($lastPaymentInMonth->tolov_sanasi);
+        if ($payDate->lte($deadline)) {
+            return;
+        }
+
+        $days = (int) $deadline->diffInDays($payDate);
+        $base = (float) $schedule->tolov_summasi;
+        $newPenya = min(
+            $base * PaymentSchedule::PENYA_RATE * $days,
+            $base * PaymentSchedule::MAX_PENYA_RATE
+        );
+
+        $schedule->penya_summasi = round($newPenya, 2);
+        $schedule->kechikish_kunlari = $days;
+        $schedule->save();
     }
 
     /**
@@ -422,18 +492,20 @@ class PaymentController extends Controller
                 }
             }
 
-            // Holatni qayta hisoblash
             $schedule->updateStatus();
-
-            // Penyani qayta hisoblash
-            $schedule->calculatePenya();
-
             $schedule->save();
+
+            // Qo'lda o'zgartirish ataylab — to'liq qayta hisoblash:
+            //   FAKT to'lovlar FIFO bo'yicha qaytadan tarqaladi va har bir
+            //   grafik penyasi yangi deadline'ga ko'ra noldan hisoblanadi.
+            DB::transaction(function () use ($schedule) {
+                $this->rebuildContractAllocations($schedule->contract, true);
+            });
 
             return response()->json([
                 'success' => true,
                 'message' => 'Grafik yangilandi',
-                'data' => $schedule->fresh()
+                'data' => $schedule->fresh(),
             ]);
         } catch (\Exception $e) {
             return response()->json([

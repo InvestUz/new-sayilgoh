@@ -7,39 +7,28 @@ use App\Models\Lot;
 use App\Models\Payment;
 use App\Models\PaymentSchedule;
 use App\Models\Tenant;
-use App\Services\PenaltyCalculatorService;
+use App\Services\PaymentApplicator;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * Unit tests for penalty calculation following contract rules (Section 8.2)
- * 
- * Business Rules Tested:
- * 1. Penalty only if payment_date > due_date
- * 2. Formula: penalty = overdue_amount * 0.004 * overdue_days
- * 3. Cap: penalty <= overdue_amount * 0.5
- * 4. Each month calculated independently
- * 5. Allocation: penalty -> rent -> advance
+ * Penya hisob-kitobi va saqlanishi uchun unit testlar.
+ *
+ * Testlar quyidagi ishlab chiqarish qoidalarini tekshiradi:
+ *   1. Stavka: kuniga 0.4% (`PENYA_RATE = 0.004`).
+ *   2. Chegara: qarzning 50% (`MAX_PENYA_RATE = 0.5`).
+ *   3. Penya faqat muddat o'tgan bo'lsa hisoblanadi (`tolovSanasi > oxirgi_muddat`).
+ *   4. `penya_summasi` MONOTON: yangi qiymat eskidan past bo'lsa eski saqlanadi.
+ *   5. To'liq to'langan grafiklar uchun penya muzlatiladi (qayta hisoblanmaydi).
+ *   6. `PaymentApplicator` faqat principal qarzga yo'naltiradi, penya yechmaydi.
  */
 class PenaltyCalculationTest extends TestCase
 {
     use RefreshDatabase;
 
-    protected PenaltyCalculatorService $penaltyService;
-
-    protected function setUp(): void
+    private function createContract(array $overrides = []): Contract
     {
-        parent::setUp();
-        $this->penaltyService = new PenaltyCalculatorService();
-    }
-
-    /**
-     * Helper to create test contract with required relations
-     */
-    private function createTestContract(): Contract
-    {
-        // Create minimal required data
         $lot = Lot::create([
             'lot_raqami' => 'TEST-' . uniqid(),
             'obyekt_nomi' => 'Test Lot',
@@ -62,7 +51,7 @@ class PenaltyCalculationTest extends TestCase
             'is_active' => true,
         ]);
 
-        return Contract::create([
+        return Contract::create(array_merge([
             'lot_id' => $lot->id,
             'tenant_id' => $tenant->id,
             'shartnoma_raqami' => 'SH-TEST-' . uniqid(),
@@ -73,438 +62,277 @@ class PenaltyCalculationTest extends TestCase
             'oylik_tolovi' => 1000000,
             'shartnoma_muddati' => 12,
             'boshlanish_sanasi' => '2025-01-01',
-            'tugash_sanasi' => '2025-12-31',
+            'tugash_sanasi' => '2030-12-31',
             'tolov_kuni' => 10,
             'penya_muddati' => 10,
             'holat' => 'faol',
             'joriy_yil' => 2025,
-        ]);
+        ], $overrides));
     }
 
-    /**
-     * Helper to create a test schedule
-     */
-    private function createTestSchedule(array $attributes = []): PaymentSchedule
+    private function createSchedule(array $overrides = []): PaymentSchedule
     {
-        $contract = $this->createTestContract();
-        
+        $contract = $this->createContract();
+
         return PaymentSchedule::create(array_merge([
             'contract_id' => $contract->id,
             'oy_raqami' => 1,
             'yil' => 2025,
             'oy' => 1,
             'tolov_sanasi' => '2025-01-01',
-            'oxirgi_muddat' => '2025-01-10', // Due date (deadline for penalty-free payment)
-            'tolov_summasi' => 1000000, // 1 million UZS
+            'oxirgi_muddat' => '2025-01-10',
+            'tolov_summasi' => 1000000,
             'tolangan_summa' => 0,
             'qoldiq_summa' => 1000000,
             'penya_summasi' => 0,
             'tolangan_penya' => 0,
             'kechikish_kunlari' => 0,
             'holat' => 'kutilmoqda',
-        ], $attributes));
+        ], $overrides));
     }
 
     // =========================================================================
-    // TEST RULE 1: Penalty only if payment_date > due_date
+    // 1. PENYA HISOBI — STAVKA, CHEGARA, MUDDAT
     // =========================================================================
 
     /** @test */
-    public function early_payment_generates_no_penalty(): void
+    public function early_or_on_time_check_does_not_create_penalty(): void
     {
-        $schedule = $this->createTestSchedule([
-            'oxirgi_muddat' => '2025-01-20',
-            'qoldiq_summa' => 1000000,
-        ]);
+        $schedule = $this->createSchedule(['oxirgi_muddat' => '2025-01-20']);
 
-        // Payment 5 days BEFORE due date
-        $paymentDate = Carbon::parse('2025-01-15');
-        $result = $this->penaltyService->calculatePenaltyForSchedule($schedule, $paymentDate);
+        $penya = $schedule->calculatePenyaAtDate(Carbon::parse('2025-01-15'), false);
 
-        $this->assertEquals(0, $result['overdue_days']);
-        $this->assertEquals(0, $result['calculated_penalty']);
-        $this->assertEquals(0.4, $result['penalty_rate']); // Rate is always shown
+        $this->assertSame(0.0, (float) $penya);
     }
 
     /** @test */
-    public function on_time_payment_generates_no_penalty(): void
+    public function late_check_creates_penalty_with_correct_formula(): void
     {
-        $schedule = $this->createTestSchedule([
-            'oxirgi_muddat' => '2025-01-20',
-            'qoldiq_summa' => 1000000,
-        ]);
-
-        // Payment exactly ON due date
-        $paymentDate = Carbon::parse('2025-01-20');
-        $result = $this->penaltyService->calculatePenaltyForSchedule($schedule, $paymentDate);
-
-        $this->assertEquals(0, $result['overdue_days']);
-        $this->assertEquals(0, $result['calculated_penalty']);
-    }
-
-    /** @test */
-    public function late_payment_generates_penalty(): void
-    {
-        $schedule = $this->createTestSchedule([
-            'oxirgi_muddat' => '2025-01-20',
-            'qoldiq_summa' => 1000000,
-        ]);
-
-        // Payment 10 days AFTER due date
-        $paymentDate = Carbon::parse('2025-01-30');
-        $result = $this->penaltyService->calculatePenaltyForSchedule($schedule, $paymentDate);
-
-        $this->assertEquals(10, $result['overdue_days']);
-        $this->assertGreaterThan(0, $result['calculated_penalty']);
-    }
-
-    // =========================================================================
-    // TEST RULE 2: penalty = overdue_amount * 0.004 * overdue_days
-    // =========================================================================
-
-    /** @test */
-    public function penalty_formula_is_correct(): void
-    {
-        $schedule = $this->createTestSchedule([
+        $schedule = $this->createSchedule([
             'oxirgi_muddat' => '2025-01-10',
-            'qoldiq_summa' => 1000000, // 1 million UZS
+            'qoldiq_summa' => 1_000_000,
         ]);
 
-        // Payment 10 days late
-        $paymentDate = Carbon::parse('2025-01-20');
-        $result = $this->penaltyService->calculatePenaltyForSchedule($schedule, $paymentDate);
+        // 10 kun kechikish: 1_000_000 * 0.004 * 10 = 40_000
+        $penya = $schedule->calculatePenyaAtDate(Carbon::parse('2025-01-20'), false);
 
-        // Expected: 1,000,000 * 0.004 * 10 = 40,000 UZS
-        $expectedPenalty = 1000000 * 0.004 * 10;
-        
-        $this->assertEquals(10, $result['overdue_days']);
-        $this->assertEquals($expectedPenalty, $result['calculated_penalty']);
+        $this->assertSame(40000.00, round((float) $penya, 2));
     }
 
     /** @test */
-    public function penalty_formula_with_different_amounts(): void
+    public function penalty_is_capped_at_50_percent_of_debt(): void
     {
-        // Test with 5 million UZS, 15 days late
-        $schedule = $this->createTestSchedule([
+        $schedule = $this->createSchedule([
             'oxirgi_muddat' => '2025-01-10',
-            'qoldiq_summa' => 5000000,
+            'qoldiq_summa' => 1_000_000,
         ]);
 
-        $paymentDate = Carbon::parse('2025-01-25'); // 15 days late
-        $result = $this->penaltyService->calculatePenaltyForSchedule($schedule, $paymentDate);
+        // 200 kun: formula bo'yicha 800_000, lekin chegara 500_000
+        $penya = $schedule->calculatePenyaAtDate(Carbon::parse('2025-01-10')->addDays(200), false);
 
-        // Expected: 5,000,000 * 0.004 * 15 = 300,000 UZS
-        $expectedPenalty = 5000000 * 0.004 * 15;
-        
-        $this->assertEquals(15, $result['overdue_days']);
-        $this->assertEquals($expectedPenalty, $result['calculated_penalty']);
+        $this->assertSame(500000.00, round((float) $penya, 2));
     }
 
     // =========================================================================
-    // TEST RULE 3: penalty <= overdue_amount * 0.5 (cap at 50%)
+    // 2. PENYANING SAQLANISHI — MONOTON O'SISH
     // =========================================================================
 
     /** @test */
-    public function penalty_is_capped_at_50_percent(): void
+    public function penalty_grows_monotonically_and_never_decreases(): void
     {
-        $schedule = $this->createTestSchedule([
+        $schedule = $this->createSchedule([
             'oxirgi_muddat' => '2025-01-10',
-            'qoldiq_summa' => 1000000,
+            'qoldiq_summa' => 1_000_000,
         ]);
 
-        // Payment 200 days late (would exceed 50% without cap)
-        // Without cap: 1,000,000 * 0.004 * 200 = 800,000 (80%)
-        // With cap: 1,000,000 * 0.5 = 500,000 (50%)
-        $paymentDate = Carbon::parse('2025-07-29'); // ~200 days later
-        $result = $this->penaltyService->calculatePenaltyForSchedule($schedule, $paymentDate);
+        // Avval 30 kun: 120_000
+        $schedule->calculatePenyaAtDate(Carbon::parse('2025-02-09'), true);
+        $this->assertSame(120000.00, round((float) $schedule->fresh()->penya_summasi, 2));
 
-        $maxPenalty = 1000000 * 0.5; // 500,000
-        
-        $this->assertLessThanOrEqual($maxPenalty, $result['calculated_penalty']);
-        $this->assertEquals($maxPenalty, $result['calculated_penalty']);
-        $this->assertTrue($result['penalty_cap_applied']);
+        // Keyin "orqaga" — eski sanaga qaytsak ham penya kamaymasligi kerak
+        $schedule->calculatePenyaAtDate(Carbon::parse('2025-01-15'), true);
+        $this->assertSame(120000.00, round((float) $schedule->fresh()->penya_summasi, 2));
     }
 
     /** @test */
-    public function penalty_cap_exactly_at_125_days(): void
+    public function penalty_is_frozen_after_principal_is_fully_paid(): void
     {
-        $schedule = $this->createTestSchedule([
+        $schedule = $this->createSchedule([
             'oxirgi_muddat' => '2025-01-10',
-            'qoldiq_summa' => 1000000,
+            'qoldiq_summa' => 1_000_000,
         ]);
 
-        // At 125 days: 1,000,000 * 0.004 * 125 = 500,000 = exactly 50%
-        $paymentDate = Carbon::parse('2025-01-10')->addDays(125);
-        $result = $this->penaltyService->calculatePenaltyForSchedule($schedule, $paymentDate);
+        $schedule->calculatePenyaAtDate(Carbon::parse('2025-02-09'), true);
+        $frozenPenya = (float) $schedule->fresh()->penya_summasi;
+        $this->assertGreaterThan(0, $frozenPenya);
 
-        // Should be exactly at cap
-        $this->assertEquals(500000, $result['calculated_penalty']);
+        $schedule->update(['tolangan_summa' => 1_000_000, 'qoldiq_summa' => 0, 'holat' => 'tolangan']);
+
+        $schedule->calculatePenyaAtDate(Carbon::parse('2026-01-01'), true);
+        $this->assertSame($frozenPenya, (float) $schedule->fresh()->penya_summasi);
     }
 
-    // =========================================================================
-    // TEST RULE 4: overdue_days = max(0, payment_date - due_date)
-    // =========================================================================
-
     /** @test */
-    public function overdue_days_calculation_is_correct(): void
+    public function update_status_does_not_zero_out_penalty(): void
     {
-        $schedule = $this->createTestSchedule([
+        $schedule = $this->createSchedule([
             'oxirgi_muddat' => '2025-01-10',
+            'qoldiq_summa' => 0,
+            'tolangan_summa' => 1_000_000,
+            'penya_summasi' => 50_000,
+            'kechikish_kunlari' => 30,
         ]);
 
-        // Test various dates
-        $testCases = [
-            ['date' => '2025-01-05', 'expected_days' => 0], // 5 days early
-            ['date' => '2025-01-10', 'expected_days' => 0], // On time
-            ['date' => '2025-01-11', 'expected_days' => 1], // 1 day late
-            ['date' => '2025-01-20', 'expected_days' => 10], // 10 days late
-            ['date' => '2025-02-10', 'expected_days' => 31], // 31 days late
-        ];
+        $schedule->updateStatus();
+        $schedule->save();
 
-        foreach ($testCases as $case) {
-            $paymentDate = Carbon::parse($case['date']);
-            $result = $this->penaltyService->calculatePenaltyForSchedule($schedule, $paymentDate);
-            
-            $this->assertEquals(
-                $case['expected_days'], 
-                $result['overdue_days'],
-                "Failed for date {$case['date']}"
-            );
-        }
+        $fresh = $schedule->fresh();
+        $this->assertSame('tolangan', $fresh->holat);
+        $this->assertSame(50000.00, round((float) $fresh->penya_summasi, 2));
+        $this->assertSame(30, (int) $fresh->kechikish_kunlari);
     }
 
     // =========================================================================
-    // TEST RULE 5: Each month calculated independently
+    // 3. PAYMENT APPLICATOR — FAQAT PRINCIPAL
     // =========================================================================
 
     /** @test */
-    public function each_month_penalty_is_independent(): void
+    public function applicator_routes_full_amount_to_principal_and_zero_to_penalty(): void
     {
-        $contract = $this->createTestContract();
+        $contract = $this->createContract();
 
-        // Create two months with different due dates
-        $month1 = PaymentSchedule::create([
+        PaymentSchedule::create([
             'contract_id' => $contract->id,
             'oy_raqami' => 1,
             'yil' => 2025,
             'oy' => 1,
             'tolov_sanasi' => '2025-01-01',
             'oxirgi_muddat' => '2025-01-10',
-            'tolov_summasi' => 1000000,
+            'tolov_summasi' => 1_000_000,
             'tolangan_summa' => 0,
-            'qoldiq_summa' => 1000000,
+            'qoldiq_summa' => 1_000_000,
             'penya_summasi' => 0,
             'tolangan_penya' => 0,
             'kechikish_kunlari' => 0,
             'holat' => 'tolanmagan',
         ]);
 
-        $month2 = PaymentSchedule::create([
+        $payment = Payment::create([
             'contract_id' => $contract->id,
-            'oy_raqami' => 2,
+            'tolov_raqami' => Payment::generateTolovRaqami(),
+            'tolov_sanasi' => '2025-02-09', // 30 kun kechikish
+            'summa' => 1_000_000,
+            'tolov_usuli' => 'bank_otkazmasi',
+            'holat' => 'tasdiqlangan',
+            'tasdiqlangan_sana' => now(),
+        ]);
+
+        $result = (new PaymentApplicator())->apply($payment, $contract);
+
+        $this->assertSame(1000000.0, (float) $result['asosiy_qarz_uchun']);
+        $this->assertSame(0.0, (float) $result['penya_uchun']);
+        $this->assertSame(0.0, (float) $result['avans']);
+
+        $schedule = $contract->paymentSchedules()->first()->fresh();
+        $this->assertSame(0.0, (float) $schedule->tolangan_penya);
+        $this->assertSame(1000000.0, (float) $schedule->tolangan_summa);
+        $this->assertGreaterThan(0, (float) $schedule->penya_summasi);
+    }
+
+    /** @test */
+    public function applicator_overpayment_goes_to_advance_balance(): void
+    {
+        $contract = $this->createContract();
+
+        PaymentSchedule::create([
+            'contract_id' => $contract->id,
+            'oy_raqami' => 1,
             'yil' => 2025,
-            'oy' => 2,
-            'tolov_sanasi' => '2025-02-01',
-            'oxirgi_muddat' => '2025-02-10',
-            'tolov_summasi' => 1000000,
+            'oy' => 1,
+            'tolov_sanasi' => '2025-01-01',
+            'oxirgi_muddat' => '2025-01-10',
+            'tolov_summasi' => 500_000,
             'tolangan_summa' => 0,
-            'qoldiq_summa' => 1000000,
+            'qoldiq_summa' => 500_000,
             'penya_summasi' => 0,
             'tolangan_penya' => 0,
             'kechikish_kunlari' => 0,
             'holat' => 'kutilmoqda',
         ]);
 
-        // Pay on January 20 - month1 is 10 days late, month2 is early
-        $paymentDate = Carbon::parse('2025-01-20');
+        $payment = Payment::create([
+            'contract_id' => $contract->id,
+            'tolov_raqami' => Payment::generateTolovRaqami(),
+            'tolov_sanasi' => '2025-01-05',
+            'summa' => 700_000,
+            'tolov_usuli' => 'bank_otkazmasi',
+            'holat' => 'tasdiqlangan',
+            'tasdiqlangan_sana' => now(),
+        ]);
 
-        $result1 = $this->penaltyService->calculatePenaltyForSchedule($month1, $paymentDate);
-        $result2 = $this->penaltyService->calculatePenaltyForSchedule($month2, $paymentDate);
+        $result = (new PaymentApplicator())->apply($payment, $contract);
 
-        // Month 1: 10 days late, should have penalty
-        $this->assertEquals(10, $result1['overdue_days']);
-        $this->assertEquals(40000, $result1['calculated_penalty']); // 1M * 0.004 * 10
-
-        // Month 2: Early (due Feb 10), should have NO penalty
-        $this->assertEquals(0, $result2['overdue_days']);
-        $this->assertEquals(0, $result2['calculated_penalty']);
-    }
-
-    // =========================================================================
-    // TEST RULE 7: Monthly details must show overdue_days, penalty_rate, calculated_penalty
-    // =========================================================================
-
-    /** @test */
-    public function monthly_details_never_null(): void
-    {
-        $schedule = $this->createTestSchedule();
-        $paymentDate = Carbon::parse('2025-01-05'); // Early payment
-
-        $result = $this->penaltyService->calculatePenaltyForSchedule($schedule, $paymentDate);
-
-        // Rule 7: No empty or NULL fields allowed
-        $this->assertIsInt($result['overdue_days']);
-        $this->assertIsFloat($result['penalty_rate']);
-        $this->assertIsFloat($result['calculated_penalty']);
-        
-        $this->assertNotNull($result['overdue_days']);
-        $this->assertNotNull($result['penalty_rate']);
-        $this->assertNotNull($result['calculated_penalty']);
+        $this->assertSame(500000.0, (float) $result['asosiy_qarz_uchun']);
+        $this->assertSame(0.0, (float) $result['penya_uchun']);
+        $this->assertSame(200000.0, (float) $result['avans']);
+        $this->assertSame(200000.0, (float) $contract->fresh()->avans_balans);
     }
 
     /** @test */
-    public function penalty_details_method_returns_required_fields(): void
+    public function applicator_is_idempotent_for_same_payment(): void
     {
-        $schedule = $this->createTestSchedule();
-        
+        $contract = $this->createContract();
+
+        PaymentSchedule::create([
+            'contract_id' => $contract->id,
+            'oy_raqami' => 1,
+            'yil' => 2025,
+            'oy' => 1,
+            'tolov_sanasi' => '2025-01-01',
+            'oxirgi_muddat' => '2025-01-10',
+            'tolov_summasi' => 1_000_000,
+            'tolangan_summa' => 0,
+            'qoldiq_summa' => 1_000_000,
+            'penya_summasi' => 0,
+            'tolangan_penya' => 0,
+            'kechikish_kunlari' => 0,
+            'holat' => 'kutilmoqda',
+        ]);
+
+        $payment = Payment::create([
+            'contract_id' => $contract->id,
+            'tolov_raqami' => Payment::generateTolovRaqami(),
+            'tolov_sanasi' => '2025-01-05',
+            'summa' => 1_000_000,
+            'tolov_usuli' => 'bank_otkazmasi',
+            'holat' => 'tasdiqlangan',
+            'tasdiqlangan_sana' => now(),
+        ]);
+
+        $applicator = new PaymentApplicator();
+        $applicator->apply($payment, $contract);
+        $applicator->apply($payment->fresh(), $contract);
+
+        $schedule = $contract->paymentSchedules()->first()->fresh();
+        $this->assertSame(1000000.0, (float) $schedule->tolangan_summa);
+        $this->assertSame(0.0, (float) $schedule->qoldiq_summa);
+    }
+
+    // =========================================================================
+    // 4. PENALTY DETAILS UCHUN UI
+    // =========================================================================
+
+    /** @test */
+    public function penalty_details_returns_required_fields(): void
+    {
+        $schedule = $this->createSchedule();
+
         $details = $schedule->getPenaltyDetails(Carbon::parse('2025-01-15'));
 
-        // Verify all required fields exist and are not null
         $this->assertArrayHasKey('overdue_days', $details);
         $this->assertArrayHasKey('penalty_rate', $details);
         $this->assertArrayHasKey('calculated_penalty', $details);
-        
+        $this->assertSame(0.4, $details['penalty_rate']);
         $this->assertIsInt($details['overdue_days']);
-        $this->assertIsFloat($details['penalty_rate']);
-        $this->assertIsNumeric($details['calculated_penalty']);
-    }
-
-    // =========================================================================
-    // TEST PAYMENT ALLOCATION
-    // =========================================================================
-
-    /** @test */
-    public function payment_allocation_skips_penalty_when_zero(): void
-    {
-        $schedule = $this->createTestSchedule([
-            'oxirgi_muddat' => '2025-01-20',
-            'qoldiq_summa' => 1000000,
-        ]);
-
-        // Pay early - no penalty
-        $paymentDate = Carbon::parse('2025-01-15');
-        $result = $schedule->applyPayment(1000000, $paymentDate);
-
-        // All should go to principal, none to penalty
-        $this->assertEquals(0, $result['penya_tolangan']);
-        $this->assertEquals(1000000, $result['asosiy_tolangan']);
-        $this->assertEquals(0, $result['qoldiq']);
-    }
-
-    /** @test */
-    public function payment_allocation_order_penalty_then_principal(): void
-    {
-        $schedule = $this->createTestSchedule([
-            'oxirgi_muddat' => '2025-01-10',
-            'qoldiq_summa' => 1000000,
-        ]);
-
-        // Pay 10 days late
-        $paymentDate = Carbon::parse('2025-01-20');
-        
-        // Pay full amount + penalty
-        $penalty = 1000000 * 0.004 * 10; // 40,000
-        $totalDue = 1000000 + $penalty;
-        
-        $result = $schedule->applyPayment($totalDue, $paymentDate);
-
-        // Penalty should be paid first
-        $this->assertEquals($penalty, $result['penya_tolangan']);
-        $this->assertEquals(1000000, $result['asosiy_tolangan']);
-        $this->assertEquals(0, $result['qoldiq']);
-    }
-
-    /** @test */
-    public function partial_payment_pays_penalty_first(): void
-    {
-        $schedule = $this->createTestSchedule([
-            'oxirgi_muddat' => '2025-01-10',
-            'qoldiq_summa' => 1000000,
-        ]);
-
-        // Pay 10 days late, but only pay 50,000
-        $paymentDate = Carbon::parse('2025-01-20');
-        $penalty = 1000000 * 0.004 * 10; // 40,000
-        
-        $result = $schedule->applyPayment(50000, $paymentDate);
-
-        // Should pay all penalty (40,000) then 10,000 to principal
-        $this->assertEquals(40000, $result['penya_tolangan']);
-        $this->assertEquals(10000, $result['asosiy_tolangan']);
-        $this->assertEquals(0, $result['qoldiq']);
-    }
-
-    /** @test */
-    public function overpayment_returns_remaining_for_advance(): void
-    {
-        $schedule = $this->createTestSchedule([
-            'oxirgi_muddat' => '2025-01-20',
-            'qoldiq_summa' => 500000,
-        ]);
-
-        // Pay early, more than due
-        $paymentDate = Carbon::parse('2025-01-15');
-        $result = $schedule->applyPayment(700000, $paymentDate);
-
-        // Should pay all principal, return extra
-        $this->assertEquals(0, $result['penya_tolangan']);
-        $this->assertEquals(500000, $result['asosiy_tolangan']);
-        $this->assertEquals(200000, $result['qoldiq']); // Goes to advance
-    }
-
-    // =========================================================================
-    // TEST EDGE CASES
-    // =========================================================================
-
-    /** @test */
-    public function zero_amount_payment_does_nothing(): void
-    {
-        $schedule = $this->createTestSchedule([
-            'qoldiq_summa' => 1000000,
-        ]);
-
-        $result = $schedule->applyPayment(0, Carbon::today());
-
-        $this->assertEquals(0, $result['penya_tolangan']);
-        $this->assertEquals(0, $result['asosiy_tolangan']);
-        $this->assertEquals(0, $result['qoldiq']);
-    }
-
-    /** @test */
-    public function already_paid_schedule_has_no_new_penalty(): void
-    {
-        $schedule = $this->createTestSchedule([
-            'oxirgi_muddat' => '2025-01-10',
-            'qoldiq_summa' => 0, // Already paid
-            'tolangan_summa' => 1000000,
-            'holat' => 'tolangan',
-        ]);
-
-        $paymentDate = Carbon::parse('2025-01-20'); // Would be late
-        $penalty = $schedule->calculatePenyaAtDate($paymentDate, false);
-
-        // Already paid schedules keep their existing penalty
-        $this->assertEquals($schedule->penya_summasi, $penalty);
-    }
-
-    /** @test */
-    public function penalty_calculation_is_deterministic(): void
-    {
-        $schedule = $this->createTestSchedule([
-            'oxirgi_muddat' => '2025-01-10',
-            'qoldiq_summa' => 1000000,
-        ]);
-
-        $paymentDate = Carbon::parse('2025-01-20');
-
-        // Calculate multiple times
-        $result1 = $this->penaltyService->calculatePenaltyForSchedule($schedule, $paymentDate);
-        $result2 = $this->penaltyService->calculatePenaltyForSchedule($schedule, $paymentDate);
-        $result3 = $this->penaltyService->calculatePenaltyForSchedule($schedule, $paymentDate);
-
-        // All should be identical
-        $this->assertEquals($result1['calculated_penalty'], $result2['calculated_penalty']);
-        $this->assertEquals($result2['calculated_penalty'], $result3['calculated_penalty']);
-        $this->assertEquals($result1['overdue_days'], $result2['overdue_days']);
     }
 }

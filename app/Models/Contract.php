@@ -252,41 +252,76 @@ class Contract extends Model
     // ============================================
 
     /**
-     * To'lov grafigini yaratish (ANNUAL RENT MODEL)
-     * Monthly payment = annual rent ÷ 12, repeated for contract duration
+     * To'lov grafigini yaratish (ANNUAL RENT MODEL + PRO-RATA FIRST MONTH)
+     *
+     * Asosiy mantiq:
+     *  - To'liq oylik = yillik_ijara_haqi ÷ 12
+     *  - Agar `boshlanish_sanasi` oyning 1-chi kunida bo'lmasa, BIRINCHI grafik
+     *    qisman oy uchun pro-rata bo'yicha hisoblanadi:
+     *
+     *      faol_kunlar = oy_kunlari − boshlanish_kuni + 1
+     *      birinchi_summa = to'liq_oylik × faol_kunlar / oy_kunlari
+     *      tejov = to'liq_oylik − birinchi_summa
+     *      qolgan_jami = (N × to'liq_oylik) − tejov
+     *      qolgan_oylik = qolgan_jami / (N − 1)
+     *
+     *    Misol (boshlanish=24.07.2025, yillik=141 536 724, N=12):
+     *      to'liq_oylik = 11 794 727
+     *      faol_kunlar = 31 − 24 + 1 = 8
+     *      birinchi_summa = 11 794 727 × 8/31 = 3 043 800,52
+     *      tejov = 8 750 926,48
+     *      qolgan_jami = 132 785 797,52
+     *      qolgan_oylik = 12 071 436,14   (× 11 oy)
+     *
+     *  - Birinchi grafikning `oxirgi_muddat` = `boshlanish_sanasi` (qisman oy
+     *    uchun grace period yo'q — to'lov darhol kutiladi).
+     *  - `birinchi_tolov_sanasi` ENDI grafik yaratishda foydalanilmaydi (legacy
+     *    maydon sifatida saqlangan). Birinchi grafik har doim
+     *    `boshlanish_sanasi` bo'yicha pro-rata bilan yaratiladi.
      */
     public function generatePaymentSchedule(): void
     {
-        // Mavjud grafikni AVVAL o'chirish (tranzaksiyadan tashqarida)
         DB::table('payment_schedules')->where('contract_id', $this->id)->delete();
 
-        // Get annual rent (yillik_ijara_haqi or shartnoma_summasi)
         $annualRent = $this->yillik_ijara_haqi ?? $this->shartnoma_summasi;
-
-        // Monthly payment = annual rent ÷ 12
-        $oylikTolov = round($annualRent / 12, 2);
+        $monthlyFull = round($annualRent / 12, 2);
 
         $boshlanishSanasi = Carbon::parse($this->boshlanish_sanasi);
-
-        // Sozlanadigan qiymatlar (default: 10)
         $tolovKuni = $this->tolov_kuni ?? 10;
         $penyaMuddati = $this->penya_muddati ?? 10;
+        $shartnomaMuddati = (int) $this->shartnoma_muddati;
+
+        // Pro-rata sharti: oyning 1-chi kunidan boshlanmagan VA shartnoma > 1 oy
+        $isPartialFirst = $boshlanishSanasi->day > 1 && $shartnomaMuddati > 1;
+
+        if ($isPartialFirst) {
+            $daysInFirstMonth = $boshlanishSanasi->daysInMonth;
+            $activeDaysInFirstMonth = $daysInFirstMonth - $boshlanishSanasi->day + 1;
+            $firstAmount = round($monthlyFull * $activeDaysInFirstMonth / $daysInFirstMonth, 2);
+            $savings = round($monthlyFull - $firstAmount, 2);
+            // (N × monthly_full − savings) qolgan summa, qolgan (N−1) ga bo'linadi
+            $remainingTotal = round($shartnomaMuddati * $monthlyFull - $savings, 2);
+            $remainingMonthly = round($remainingTotal / ($shartnomaMuddati - 1), 2);
+        } else {
+            $firstAmount = $monthlyFull;
+            $remainingMonthly = $monthlyFull;
+        }
 
         $schedules = [];
         $firstYear = null;
 
-        for ($i = 1; $i <= $this->shartnoma_muddati; $i++) {
-            // Birinchi oy uchun maxsus sana
-            if ($i === 1 && $this->birinchi_tolov_sanasi) {
-                $tolovSanasi = Carbon::parse($this->birinchi_tolov_sanasi);
+        for ($i = 1; $i <= $shartnomaMuddati; $i++) {
+            if ($i === 1) {
+                // Birinchi grafik — har doim boshlanish sanasi
+                $tolovSanasi = $boshlanishSanasi->copy();
+                $oxirgiMuddat = $boshlanishSanasi->copy();
+                $amount = $firstAmount;
             } else {
-                // Har oyning belgilangan kunida (default 10-chi)
-                $tolovSanasi = $boshlanishSanasi->copy()
-                    ->addMonths($i - 1)
-                    ->day($tolovKuni);
+                $tolovSanasi = $boshlanishSanasi->copy()->addMonths($i - 1)->day($tolovKuni);
+                $oxirgiMuddat = $tolovSanasi->copy()->addDays($penyaMuddati);
+                $amount = $remainingMonthly;
             }
 
-            // Birinchi yilni saqlash
             if ($firstYear === null) {
                 $firstYear = $tolovSanasi->year;
             }
@@ -297,10 +332,10 @@ class Contract extends Model
                 'yil' => $tolovSanasi->year,
                 'oy' => $tolovSanasi->month,
                 'tolov_sanasi' => $tolovSanasi->format('Y-m-d'),
-                'oxirgi_muddat' => $tolovSanasi->copy()->addDays($penyaMuddati)->format('Y-m-d'),
-                'tolov_summasi' => $oylikTolov,
+                'oxirgi_muddat' => $oxirgiMuddat->format('Y-m-d'),
+                'tolov_summasi' => $amount,
                 'tolangan_summa' => 0,
-                'qoldiq_summa' => $oylikTolov,
+                'qoldiq_summa' => $amount,
                 'penya_summasi' => 0,
                 'tolangan_penya' => 0,
                 'kechikish_kunlari' => 0,
@@ -310,10 +345,8 @@ class Contract extends Model
             ];
         }
 
-        // Bulk insert
         DB::table('payment_schedules')->insert($schedules);
 
-        // Joriy yilni o'rnatish (birinchi yil)
         $this->joriy_yil = $firstYear;
         $this->save();
     }

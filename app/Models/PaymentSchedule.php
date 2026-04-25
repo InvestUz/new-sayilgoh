@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Services\PenaltyCalculatorService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -151,16 +150,15 @@ class PaymentSchedule extends Model
     // ============================================
 
     /**
-     * Calculate penalty as of current date
-     * Uses PenaltyCalculatorService for contract-compliant calculation
+     * Calculate penalty as of current date.
      *
-     * Contract Rules:
-     * - Rate: 0.4% per day
-     * - Cap: 50% of overdue amount
-     * - Only applies when current date > due date
+     * Contract qoidalari:
+     * - Stavka: kuniga 0.4%
+     * - Chegara: qarzning 50%
+     * - Faqat muddat o'tgan bo'lsa qo'llaniladi
      *
-     * @param bool $save - Whether to persist the result
-     * @return float Calculated penalty amount
+     * @param bool $save DB ga saqlansinmi
+     * @return float Joriy `penya_summasi`
      */
     public function calculatePenya(bool $save = true): float
     {
@@ -169,80 +167,69 @@ class PaymentSchedule extends Model
 
     /**
      * Calculate penalty at a specific date
-     * This is the PRIMARY penalty calculation method
+     * This is the PRIMARY penalty calculation method.
      *
-     * Business Rules (Contract Section 8.2):
-     * 1. If payment_date <= due_date → penalty = 0
-     * 2. penalty = overdue_amount * 0.004 * overdue_days
-     * 3. penalty <= overdue_amount * 0.5 (cap)
-     * 4. overdue_days = max(0, payment_date - due_date)
+     * PERSISTENCE QOIDASI (penya yo'qolmasligi shart):
+     * ──────────────────────────────────────────────────────────────────────
+     *  - `penya_summasi` MONOTON ravishda o'sadi: yangi hisoblangan qiymat
+     *    avvalgi `penya_summasi`'dan KICHIK bo'lsa, eski (yuqoriroq) qiymat
+     *    saqlab qolinadi. Bu — qisman to'lovdan keyin yoki shartnoma
+     *    to'liq yopilgandan keyin tarixda jamlangan penya o'chmasligi
+     *    uchun kafolat.
+     *  - Grafik to'liq to'langan bo'lsa (qoldiq_summa <= 0), `penya_summasi`
+     *    "muzlatilgan" deb hisoblanadi va hech qachon avtomatik tarzda
+     *    qayta nolga tushirilmaydi. Faqat `/api/penalty-payments` orqali
+     *    ko'paytirilgan `tolangan_penya` uni qoplashi mumkin.
      *
-     * @param Carbon $tolovSanasi - The date to calculate penalty as of
-     * @param bool $save - Whether to persist the result
-     * @return float Calculated penalty amount
+     * Hisob qoidalari (Shartnoma 8.2-bandi):
+     * 1. tolovSanasi <= oxirgi_muddat  → yangi penya hisoblanmaydi
+     * 2. penya = qoldiq_summa * 0.004 * kechikish_kunlari
+     * 3. penya <= qoldiq_summa * 0.5 (chegara 50%)
+     *
+     * @param Carbon $tolovSanasi To'lov yoki hisob sanasi
+     * @param bool   $save        DB ga saqlansinmi
+     * @return float Joriy `penya_summasi` qiymati
      */
     public function calculatePenyaAtDate(Carbon $tolovSanasi, bool $save = true): float
     {
-        // Rule: Fully paid schedules have no new penalty
-        // Tarixiy holat: agar oldin penya to'langan bo'lsa (tolangan_penya > 0),
-        // uni saqlaymiz. Aks holda qoldiq 0 bo'lgan grafikda penya 0 bo'lishi
-        // kerak — aks holda `penya_summasi` maydoni (to'lov paytidagi
-        // informatsion hisoblash qoldig'i) ko'rsatkichlarni noto'g'ri oshiradi.
-        if ($this->holat === 'tolangan' || (float) $this->qoldiq_summa <= 0) {
-            if ((float) $this->tolangan_penya > 0) {
-                return (float) $this->penya_summasi;
-            }
-            if ((float) $this->penya_summasi !== 0.0 || (int) $this->kechikish_kunlari !== 0) {
-                $this->penya_summasi = 0;
-                $this->kechikish_kunlari = 0;
-                if ($save) {
-                    $this->save();
-                }
-            }
-            return 0.0;
+        $existingPenya = (float) $this->penya_summasi;
+
+        // To'liq to'langan grafiklar — penya muzlatilgan, qayta hisoblamaymiz
+        if ((float) $this->qoldiq_summa <= 0) {
+            return $existingPenya;
         }
 
-        // Rule: Expired contracts don't accumulate new penalties
+        // Tugagan shartnoma — yangi penya yig'ilmaydi, mavjud qiymat saqlanadi
         $contract = $this->contract;
         if ($contract && $contract->is_expired) {
-            return (float) $this->penya_summasi;
+            return $existingPenya;
         }
 
-        // Use custom deadline if set, otherwise use original deadline
         $oxirgiMuddat = $this->custom_oxirgi_muddat
             ? Carbon::parse($this->custom_oxirgi_muddat)
             : Carbon::parse($this->oxirgi_muddat);
 
-        // Rule 1: If payment_date <= due_date → penalty = 0
+        // Hali muddat o'tmagan — tarixiy penya bor bo'lsa saqlaymiz
         if ($tolovSanasi->lte($oxirgiMuddat)) {
-            $this->kechikish_kunlari = 0;
-            $this->penya_summasi = 0;
-
-            if ($save) {
-                $this->save();
-            }
-            return 0;
+            return $existingPenya;
         }
 
-        // Rule 4: Calculate overdue days
-        $kechikishKunlari = $oxirgiMuddat->diffInDays($tolovSanasi);
-        $this->kechikish_kunlari = $kechikishKunlari;
-
-        // Rule 2: penalty = overdue_amount * 0.0004 * overdue_days
+        $kechikishKunlari = (int) $oxirgiMuddat->diffInDays($tolovSanasi);
         $overdueAmount = (float) $this->qoldiq_summa;
-        $penya = $overdueAmount * self::PENYA_RATE * $kechikishKunlari;
-
-        // Rule 3: penalty <= overdue_amount * 0.5 (cap at 50%)
         $maxPenya = $overdueAmount * self::MAX_PENYA_RATE;
-        $penya = min($penya, $maxPenya);
+        $newPenya = min($overdueAmount * self::PENYA_RATE * $kechikishKunlari, $maxPenya);
 
-        $this->penya_summasi = round($penya, 2);
+        // MONOTON: yangi qiymat eskidan past bo'lmasligi kerak
+        $finalPenya = round(max($existingPenya, $newPenya), 2);
+
+        $this->kechikish_kunlari = max((int) $this->kechikish_kunlari, $kechikishKunlari);
+        $this->penya_summasi = $finalPenya;
 
         if ($save) {
             $this->save();
         }
 
-        return $this->penya_summasi;
+        return (float) $this->penya_summasi;
     }
 
     /**
@@ -286,74 +273,17 @@ class PaymentSchedule extends Model
     }
 
     /**
-     * Apply payment to this schedule
+     * Holatni yangilash.
      *
-     * Payment allocation order (Contract Rule 6):
-     * a) penalty (ONLY if penalty > 0)
-     * b) overdue rent
-     * c) current rent
-     *
-     * Rule 8: If penalty = 0, skip penalty allocation step entirely
-     *
-     * @param float $amount Amount to apply
-     * @param Carbon|null $paymentDate Date of payment (for penalty calculation)
-     * @return array Result with penalty_tolangan, asosiy_tolangan, qoldiq
-     */
-    public function applyPayment(float $amount, ?Carbon $paymentDate = null): array
-    {
-        $paymentDate = $paymentDate ?? Carbon::today();
-
-        $result = [
-            'penya_tolangan' => 0,
-            'asosiy_tolangan' => 0,
-            'qoldiq' => $amount,
-            'penalty_details' => null,
-        ];
-
-        // Calculate penalty at payment date
-        $this->calculatePenyaAtDate($paymentDate, false);
-        $result['penalty_details'] = $this->getPenaltyDetails($paymentDate);
-
-        // Rule 6a: Pay penalty first (ONLY if penalty > 0 - Rule 8)
-        $qoldiqPenya = $this->penya_summasi - $this->tolangan_penya;
-        if ($qoldiqPenya > 0 && $result['qoldiq'] > 0) {
-            $penyaTolov = min($qoldiqPenya, $result['qoldiq']);
-            $this->tolangan_penya += $penyaTolov;
-            $result['penya_tolangan'] = $penyaTolov;
-            $result['qoldiq'] -= $penyaTolov;
-        }
-
-        // Rule 6b & 6c: Pay rent (overdue and current)
-        if ($this->qoldiq_summa > 0 && $result['qoldiq'] > 0) {
-            $asosiyTolov = min($this->qoldiq_summa, $result['qoldiq']);
-            $this->tolangan_summa += $asosiyTolov;
-            $this->qoldiq_summa -= $asosiyTolov;
-            $result['asosiy_tolangan'] = $asosiyTolov;
-            $result['qoldiq'] -= $asosiyTolov;
-        }
-
-        // Update status
-        $this->updateStatus();
-        $this->save();
-
-        return $result;
-    }
-
-    /**
-     * Holatni yangilash
+     * Diqqat: bu metod `penya_summasi` yoki `kechikish_kunlari`'ni HECH QACHON
+     * nolga keltirmaydi. Penya tarixiy ma'lumot bo'lib, faqat
+     * `/api/penalty-payments` orqali qoplanishi mumkin.
      */
     public function updateStatus(): void
     {
-        if ($this->qoldiq_summa <= 0) {
+        if ((float) $this->qoldiq_summa <= 0) {
             $this->holat = 'tolangan';
-            // Grafik to'liq to'langanda (va tarixiy penya to'lanmagan bo'lsa),
-            // ``penya_summasi`` va ``kechikish_kunlari`` maydonlari qaytadan
-            // stale informatsion qoldiqqa aylanmasligi uchun tozalanadi.
-            if ((float) $this->tolangan_penya <= 0) {
-                $this->penya_summasi = 0;
-                $this->kechikish_kunlari = 0;
-            }
-        } elseif ($this->tolangan_summa > 0) {
+        } elseif ((float) $this->tolangan_summa > 0) {
             $this->holat = 'qisman_tolangan';
         } elseif (Carbon::parse($this->tolov_sanasi)->isPast()) {
             $this->holat = 'tolanmagan';

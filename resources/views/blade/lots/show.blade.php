@@ -105,6 +105,76 @@ function formatLotSum($num) {
             <div class="h-3 bg-gradient-to-r from-blue-500 to-blue-400 rounded-full transition-all" style="width: {{ $paidPercent }}%"></div>
         </div>
     </div>
+
+    {{-- ─── JORIY OY (Current calendar month summary) ─── --}}
+    @isset($currentMonth)
+    @php
+        $cm = $currentMonth;
+        $cmDebtClass = $cm['debt'] > 0 ? ($cm['is_overdue'] ? 'text-red-400' : 'text-amber-300') : 'text-emerald-400';
+        $cmBorderClass = $cm['debt'] > 0 ? ($cm['is_overdue'] ? 'border-l-red-500' : 'border-l-amber-500') : 'border-l-emerald-500';
+        $cmStatusLabel = !$cm['has_schedule']
+            ? 'Grafik yo\'q'
+            : ($cm['debt'] <= 0
+                ? 'To\'liq to\'langan'
+                : ($cm['is_overdue'] ? 'Muddati o\'tgan' : 'Kutilmoqda'));
+    @endphp
+    <div class="bg-slate-800/50 backdrop-blur rounded-xl border border-slate-700/50 border-l-4 {{ $cmBorderClass }} p-5 mb-6">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+                <p class="text-xs uppercase tracking-wide text-slate-400 font-medium">Joriy oy</p>
+                <h3 class="text-xl font-bold text-white mt-1">{{ $cm['label'] }}</h3>
+                <p class="text-sm text-slate-400 mt-1">{{ $cm['sahifa_xulosa'] }}</p>
+            </div>
+            <span class="self-start md:self-center inline-flex items-center px-3 py-1 text-xs font-medium rounded
+                {{ $cm['debt'] <= 0 ? 'bg-emerald-500/15 text-emerald-300'
+                   : ($cm['is_overdue'] ? 'bg-red-500/15 text-red-300' : 'bg-amber-500/15 text-amber-300') }}">
+                {{ $cmStatusLabel }}
+            </span>
+        </div>
+
+        @if($cm['has_schedule'])
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-5">
+            <div>
+                <p class="text-[11px] uppercase text-slate-500">Reja</p>
+                <p class="text-lg font-semibold text-white mt-1">{!! formatLotSum($cm['plan']) !!}</p>
+            </div>
+            <div>
+                <p class="text-[11px] uppercase text-slate-500">To'langan</p>
+                <p class="text-lg font-semibold text-emerald-400 mt-1">{!! formatLotSum($cm['paid']) !!}</p>
+            </div>
+            <div>
+                <p class="text-[11px] uppercase text-slate-500">Qarz (shu oy)</p>
+                <p class="text-lg font-semibold {{ $cmDebtClass }} mt-1">{!! formatLotSum($cm['debt']) !!}</p>
+            </div>
+            <div>
+                <p class="text-[11px] uppercase text-slate-500">Penya (qoldiq)</p>
+                <p class="text-lg font-semibold {{ $cm['penalty'] > 0 ? 'text-amber-300' : 'text-white' }} mt-1">
+                    {!! formatLotSum($cm['penalty']) !!}
+                </p>
+            </div>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4 text-xs text-slate-400">
+            <div>
+                <span class="text-slate-500">To'lov sanasi:</span>
+                <span class="text-slate-200">{{ $cm['tolov_sanasi'] ? \Carbon\Carbon::parse($cm['tolov_sanasi'])->format('d.m.Y') : '—' }}</span>
+            </div>
+            <div>
+                <span class="text-slate-500">Oxirgi muddat:</span>
+                <span class="text-slate-200">{{ $cm['effective_deadline'] ? \Carbon\Carbon::parse($cm['effective_deadline'])->format('d.m.Y') : '—' }}</span>
+            </div>
+            <div>
+                @if($cm['debt'] <= 0)
+                    <span class="text-emerald-400">Yopilgan</span>
+                @elseif($cm['is_overdue'])
+                    <span class="text-red-400">{{ $cm['overdue_days'] }} kun kechikish</span>
+                @else
+                    <span class="text-amber-300">{{ $cm['days_left'] }} kun qoldi</span>
+                @endif
+            </div>
+        </div>
+        @endif
+    </div>
+    @endisset
     @endif
 
     <!-- Main Grid: Lot Info + Contract/Tenant Info -->
@@ -615,8 +685,16 @@ function formatLotSum($num) {
                                         <input type="date" x-model="form.new_deadline" class="w-full border border-slate-500 bg-slate-700 rounded px-1 py-0.5 text-xs text-white">
                                     </template>
                                 </td>
-                                <td class="border border-slate-600 px-2 py-1 text-right text-white">
-                                    <template x-if="!editing"><span>{{ number_format($scheduleData['tolov_summasi'], 0, ',', ' ') }}</span></template>
+                                <td class="border border-slate-600 px-2 py-1 text-right text-white"
+                                    @if(!empty($scheduleData['pro_rata_tooltip'])) title="{{ $scheduleData['pro_rata_tooltip'] }}" @endif>
+                                    <template x-if="!editing">
+                                        <span>
+                                            {{ number_format($scheduleData['tolov_summasi'], 0, ',', ' ') }}
+                                            @if(!empty($scheduleData['is_pro_rata']))
+                                                <span class="text-[8px] text-amber-400 ml-0.5" title="Qisman oy (pro-rata)">⊘</span>
+                                            @endif
+                                        </span>
+                                    </template>
                                     <template x-if="editing"><input type="number" x-model="form.tolov_summasi" class="w-full border border-slate-500 bg-slate-700 rounded px-1 py-0.5 text-xs text-right text-white"></template>
                                 </td>
                                 @php $ft = (float) ($scheduleData['fakt_tushgan'] ?? 0); $faktDocs = $scheduleData['fakt_payments'] ?? []; @endphp
@@ -756,8 +834,16 @@ function formatLotSum($num) {
                                         <input type="date" x-model="form.new_deadline" class="w-full border border-slate-500 bg-slate-700 rounded px-1 py-0.5 text-xs text-white">
                                     </template>
                                 </td>
-                                <td class="border border-slate-600 px-2 py-1 text-right text-white">
-                                    <template x-if="!editing"><span>{{ number_format($scheduleData['tolov_summasi'], 0, ',', ' ') }}</span></template>
+                                <td class="border border-slate-600 px-2 py-1 text-right text-white"
+                                    @if(!empty($scheduleData['pro_rata_tooltip'])) title="{{ $scheduleData['pro_rata_tooltip'] }}" @endif>
+                                    <template x-if="!editing">
+                                        <span>
+                                            {{ number_format($scheduleData['tolov_summasi'], 0, ',', ' ') }}
+                                            @if(!empty($scheduleData['is_pro_rata']))
+                                                <span class="text-[8px] text-amber-400 ml-0.5" title="Qisman oy (pro-rata)">⊘</span>
+                                            @endif
+                                        </span>
+                                    </template>
                                     <template x-if="editing"><input type="number" x-model="form.tolov_summasi" class="w-full border border-slate-500 bg-slate-700 rounded px-1 py-0.5 text-xs text-right text-white"></template>
                                 </td>
                                 @php $ft = (float) ($scheduleData['fakt_tushgan'] ?? 0); $faktDocs = $scheduleData['fakt_payments'] ?? []; @endphp

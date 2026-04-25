@@ -2,120 +2,103 @@
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
-use App\Models\Payment;
 use App\Models\Contract;
-use App\Models\PaymentSchedule;
+use App\Models\Payment;
+use App\Services\PaymentApplicator;
 use Carbon\Carbon;
+use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Tasdiqlangan to'lovlarni grafiklarga qaytadan qo'llash.
+ *
+ * Bu komanda quyidagi hollarda foydali:
+ *   - Penya/qoldiq qiymatlari noto'g'ri yuklangan bo'lsa.
+ *   - Eski to'lovlar tartibi o'zgartirilgan bo'lsa.
+ *   - Migratsiya yoki ko'p sonli o'zgartirishdan keyin sanity check.
+ *
+ * QOIDA: penya tarixiy ma'lumot — `penya_summasi`, `kechikish_kunlari` va
+ * `tolangan_penya` HECH QACHON nolga tushirilmaydi. Yakunda penya bugungi
+ * sana bo'yicha monoton ravishda yangilanadi.
+ */
 class ReapplyPayments extends Command
 {
-    /**
-     * The name and signature of the console command.
-     */
     protected $signature = 'payments:reapply
-                            {--contract= : Specific contract ID to reapply}
-                            {--payment= : Specific payment ID to reapply}
-                            {--dry-run : Show what would be done without making changes}';
+                            {--contract= : Specific contract ID}
+                            {--payment= : Specific payment ID (re-runs full contract)}
+                            {--dry-run : Show summary without writing to DB}';
 
-    /**
-     * The console command description.
-     */
-    protected $description = 'Re-apply payments to payment schedules using FIFO method';
+    protected $description = 'Tasdiqlangan to\'lovlarni FIFO tartibida qaytadan qo\'llash';
 
-    /**
-     * Execute the console command.
-     */
     public function handle(): int
     {
-        $dryRun = $this->option('dry-run');
+        $dryRun = (bool) $this->option('dry-run');
         $contractId = $this->option('contract');
         $paymentId = $this->option('payment');
 
         if ($dryRun) {
-            $this->warn('DRY RUN MODE - No changes will be made');
+            $this->warn('DRY RUN — DBga yozilmaydi');
             $this->newLine();
         }
 
         if ($paymentId) {
-            // Reapply single payment
-            return $this->reapplySinglePayment($paymentId, $dryRun);
+            return $this->reapplySinglePayment((int) $paymentId, $dryRun);
         }
 
         if ($contractId) {
-            // Reapply all payments for a specific contract
-            return $this->reapplyContractPayments($contractId, $dryRun);
+            return $this->reapplyContractPayments((int) $contractId, $dryRun);
         }
 
-        // Reapply all payments
         return $this->reapplyAllPayments($dryRun);
     }
 
-    /**
-     * Reapply a single payment
-     */
     private function reapplySinglePayment(int $paymentId, bool $dryRun): int
     {
-        $payment = Payment::with(['contract.paymentSchedules'])->find($paymentId);
-
+        $payment = Payment::with('contract.paymentSchedules')->find($paymentId);
         if (!$payment) {
-            $this->error("Payment #{$paymentId} not found");
-            return 1;
+            $this->error("Payment #{$paymentId} topilmadi");
+            return self::FAILURE;
         }
 
-        $this->info("Reapplying Payment #{$paymentId}");
-        $this->info("  Amount: " . number_format($payment->summa, 2));
-        $this->info("  Date: " . $payment->tolov_sanasi->format('d.m.Y'));
-        $this->info("  Contract: " . $payment->contract->shartnoma_raqami);
+        $this->info("Payment #{$paymentId} ({$payment->summa} so'm) — shartnoma {$payment->contract->shartnoma_raqami}");
 
         if (!$dryRun) {
             $this->resetAndReapplyContractPayments($payment->contract);
-            $this->info("Payment reapplied successfully!");
+            $this->info('Bajarildi');
         }
 
-        return 0;
+        return self::SUCCESS;
     }
 
-    /**
-     * Reapply all payments for a contract
-     */
     private function reapplyContractPayments(int $contractId, bool $dryRun): int
     {
-        $contract = Contract::with(['paymentSchedules', 'payments' => function ($q) {
-            $q->where('holat', 'tasdiqlangan')->orderBy('tolov_sanasi');
-        }])->find($contractId);
-
+        $contract = Contract::with('paymentSchedules')->find($contractId);
         if (!$contract) {
-            $this->error("Contract #{$contractId} not found");
-            return 1;
+            $this->error("Contract #{$contractId} topilmadi");
+            return self::FAILURE;
         }
 
-        $this->info("Contract: " . $contract->shartnoma_raqami);
-        $this->info("Payments to reapply: " . $contract->payments->count());
+        $count = $contract->payments()->where('holat', 'tasdiqlangan')->count();
+        $this->info("Shartnoma: {$contract->shartnoma_raqami}, qaytadan qo'llanadi: {$count} ta to'lov");
 
         if (!$dryRun) {
             $this->resetAndReapplyContractPayments($contract);
-            $this->info("All payments reapplied successfully!");
+            $this->info('Bajarildi');
         }
 
-        return 0;
+        return self::SUCCESS;
     }
 
-    /**
-     * Reapply all payments in the system
-     */
     private function reapplyAllPayments(bool $dryRun): int
     {
-        $contracts = Contract::whereHas('payments', function ($q) {
-            $q->where('holat', 'tasdiqlangan');
-        })->with(['paymentSchedules', 'payments' => function ($q) {
-            $q->where('holat', 'tasdiqlangan')->orderBy('tolov_sanasi');
-        }])->get();
+        $contracts = Contract::whereHas('payments', fn ($q) => $q->where('holat', 'tasdiqlangan'))
+            ->with('paymentSchedules')
+            ->get();
 
-        $this->info("Found {$contracts->count()} contracts with payments");
+        $this->info("Topildi: {$contracts->count()} ta shartnoma");
 
         $bar = $this->output->createProgressBar($contracts->count());
+        $bar->start();
 
         foreach ($contracts as $contract) {
             if (!$dryRun) {
@@ -126,46 +109,35 @@ class ReapplyPayments extends Command
 
         $bar->finish();
         $this->newLine(2);
-        $this->info("Done! All payments reapplied.");
+        $this->info('Bajarildi');
 
-        return 0;
+        return self::SUCCESS;
     }
 
-    /**
-     * Reset schedule paid amounts and reapply all payments
-     */
     private function resetAndReapplyContractPayments(Contract $contract): void
     {
         DB::beginTransaction();
 
         try {
-            // Reset all schedules
-            foreach ($contract->paymentSchedules as $schedule) {
-                $schedule->tolangan_summa = 0;
-                $schedule->qoldiq_summa = $schedule->tolov_summasi;
-                $schedule->tolangan_penya = 0;
-                $schedule->updateStatus();
-                $schedule->save();
-            }
+            $contract->paymentSchedules()->update([
+                'tolangan_summa' => 0,
+                'qoldiq_summa'   => DB::raw('tolov_summasi'),
+                'holat'          => 'kutilmoqda',
+            ]);
 
-            // Reset avans
             $contract->avans_balans = 0;
             $contract->save();
 
-            // Reload schedules
             $contract->load('paymentSchedules');
 
-            // Reapply all payments in order
             $payments = $contract->payments()
                 ->where('holat', 'tasdiqlangan')
                 ->orderBy('tolov_sanasi')
+                ->orderBy('id')
                 ->get();
 
-            // Canonical applier — hozirgi siyosat: principal-only, penya
-            // avtomatik yechilmaydi.
-            $applicator = app(\App\Services\PaymentApplicator::class);
+            $applicator = app(PaymentApplicator::class);
             foreach ($payments as $payment) {
-                // reapply uchun oldingi taqsimotni nolga tushiramiz
                 $payment->asosiy_qarz_uchun = 0;
                 $payment->penya_uchun = 0;
                 $payment->avans = 0;
@@ -174,12 +146,16 @@ class ReapplyPayments extends Command
                 $applicator->apply($payment, $contract);
             }
 
+            $today = Carbon::today();
+            foreach ($contract->paymentSchedules()->get() as $schedule) {
+                $schedule->calculatePenyaAtDate($today, true);
+            }
+
             DB::commit();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             DB::rollBack();
-            $this->error("Error: " . $e->getMessage());
+            $this->error('Xatolik: ' . $e->getMessage());
             throw $e;
         }
     }
-
 }

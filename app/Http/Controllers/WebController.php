@@ -15,343 +15,6 @@ use Carbon\Carbon;
 
 class WebController extends Controller
 {
-    // ==================== DASHBOARD ====================
-    public function dashboard(Request $request)
-    {
-        $year = $request->get('year'); // null = all years by default
-        $period = $request->get('period', 'month'); // month, quarter, year
-        $search = $request->get('search', '');
-        $status = $request->get('status', 'all'); // all, qarzdor, tolangan, muddati_otgan
-        $minAmount = $request->get('min_amount', null);
-        $maxAmount = $request->get('max_amount', null);
-
-        $bugun = Carbon::today();
-
-        // Base query for contracts - APPLY YEAR FILTER only if specified
-        // EXCLUDE expired contracts (tugash_sanasi < today)
-        $contractsQuery = Contract::with(['paymentSchedules', 'tenant', 'lot'])
-            ->where('holat', 'faol')
-            ->where('tugash_sanasi', '>=', Carbon::today());
-
-        // Only filter by year if explicitly set
-        if ($year) {
-            $contractsQuery->whereYear('boshlanish_sanasi', $year);
-        }
-
-        // Apply search filter
-        if ($search) {
-            $contractsQuery->where(function($q) use ($search) {
-                $q->where('shartnoma_raqami', 'like', "%{$search}%")
-                  ->orWhereHas('tenant', fn($tq) => $tq->where('name', 'like', "%{$search}%")->orWhere('inn', 'like', "%{$search}%"))
-                  ->orWhereHas('lot', fn($lq) => $lq->where('lot_raqami', 'like', "%{$search}%")->orWhere('obyekt_nomi', 'like', "%{$search}%"));
-            });
-        }
-
-        // Apply amount filter
-        if ($minAmount) {
-            $contractsQuery->where('shartnoma_summasi', '>=', $minAmount);
-        }
-        if ($maxAmount) {
-            $contractsQuery->where('shartnoma_summasi', '<=', $maxAmount);
-        }
-
-        $contracts = $contractsQuery->get();
-
-        // Apply status filter after loading (needs calculated fields)
-        if ($status === 'qarzdor') {
-            $contracts = $contracts->filter(fn($c) => $c->paymentSchedules->sum('qoldiq_summa') > 0);
-        } elseif ($status === 'tolangan') {
-            $contracts = $contracts->filter(fn($c) => $c->paymentSchedules->sum('qoldiq_summa') <= 0);
-        } elseif ($status === 'muddati_otgan') {
-            $contracts = $contracts->filter(function($c) use ($bugun) {
-                return $c->paymentSchedules->filter(function($s) use ($bugun) {
-                    $effectiveDeadline = $s->custom_oxirgi_muddat ?? $s->oxirgi_muddat;
-                    return Carbon::parse($effectiveDeadline)->lt($bugun) && $s->qoldiq_summa > 0;
-                })->count() > 0;
-            });
-        }
-
-        /*
-         * ═══════════════════════════════════════════════════════════════════════
-         * QARZ HISOBLASH FORMULASI (Debt Calculation Formula)
-         * ═══════════════════════════════════════════════════════════════════════
-         *
-         * 1. JAMI TO'LANGAN = SUM(tolangan_summa) from payment_schedules
-         *    - Bu - haqiqatda to'langan pul miqdori
-         *
-         * 2. JAMI KUTILGAN (Plan) = SUM(tolov_summasi) from payment_schedules WHERE tolov_sanasi <= bugun
-         *    - Bu - bugungi kunga qadar to'lanishi kerak bo'lgan summa
-         *
-         * 3. MUDDATI O'TGAN QARZ = SUM(qoldiq_summa) WHERE oxirgi_muddat < bugun
-         *    - Bu - to'lov muddati o'tgan, lekin to'lanmagan summa (HAQIQIY QARZ)
-         *
-         * 4. MUDDATI O'TMAGAN QARZ = SUM(qoldiq_summa) WHERE oxirgi_muddat >= bugun
-         *    - Bu - hali to'lov muddati kelmagan summa
-         *
-         * 5. PENYA = qoldiq_summa × 0.4% × kechikish_kunlari (max 50%)
-         *    - Har bir kechikkan kun uchun 0.4% jarima
-         *
-         * 6. JAMI QOLDIQ = shartnoma_summasi - jami_tolangan
-         *    - Shartnomadan qolgan umumiy summa
-         * ═══════════════════════════════════════════════════════════════════════
-         */
-
-        // Calculate stats with CORRECT debt formulas
-        // Only count debt where payment is actually due (oxirgi_muddat < today)
-        $jamiMuddatiOtganQarz = 0;
-        $jamiMuddatiOtmaganQarz = 0;
-        $jamiTolangan = 0;
-        $jamiPenya = 0;
-        $jamiKutilgan = 0; // Plan: what should have been paid by now
-
-        foreach ($contracts as $contract) {
-            foreach ($contract->paymentSchedules as $schedule) {
-                $jamiTolangan += $schedule->tolangan_summa;
-                $jamiPenya += ($schedule->penya_summasi - $schedule->tolangan_penya);
-
-                // Kutilgan: only schedules where payment date has passed
-                if (Carbon::parse($schedule->tolov_sanasi)->lte($bugun)) {
-                    $jamiKutilgan += $schedule->tolov_summasi;
-                }
-
-                if ($schedule->qoldiq_summa > 0) {
-                    // Use effective deadline (custom if set, otherwise original)
-                    $effectiveDeadline = $schedule->custom_oxirgi_muddat ?? $schedule->oxirgi_muddat;
-                    if (Carbon::parse($effectiveDeadline)->lt($bugun)) {
-                        $jamiMuddatiOtganQarz += $schedule->qoldiq_summa;
-                    } else {
-                        // Not yet due
-                        $jamiMuddatiOtmaganQarz += $schedule->qoldiq_summa;
-                    }
-                }
-            }
-        }
-
-                // Calculate counts for each filter type FROM FILTERED CONTRACTS
-        $muddatiOtganCount = 0;
-        $penyaCount = 0;
-        $tolanganCount = 0;
-        $kutilmoqdaCount = 0;
-        $qarzdorCount = 0;
-
-        // Calculate counts from filtered contracts (respects year filter)
-        foreach ($contracts as $contract) {
-            $lotQarz = 0;
-            $lotPenya = 0;
-            $lotTolangan = 0;
-            $lotKutilmoqda = 0;
-            $lotKechikishKunlari = 0;
-
-            foreach ($contract->paymentSchedules as $schedule) {
-                $lotTolangan += $schedule->tolangan_summa;
-
-                if ($schedule->qoldiq_summa > 0) {
-                    // Use effective deadline
-                    $effectiveDeadline = $schedule->custom_oxirgi_muddat ?? $schedule->oxirgi_muddat;
-                    $oxirgiMuddat = Carbon::parse($effectiveDeadline);
-                    if ($oxirgiMuddat->lt($bugun)) {
-                        $lotQarz += $schedule->qoldiq_summa;
-                        $days = $oxirgiMuddat->diffInDays($bugun);
-                        $lotKechikishKunlari = max($lotKechikishKunlari, $days);
-                        $penyaCalc = $schedule->qoldiq_summa * 0.004 * $days;
-                        $maxPenya = $schedule->qoldiq_summa * 0.5;
-                        $lotPenya += min($penyaCalc, $maxPenya);
-                    } else {
-                        $lotKutilmoqda += $schedule->qoldiq_summa;
-                    }
-                }
-            }
-
-            if ($lotQarz > 0 && $lotKechikishKunlari > 0) $muddatiOtganCount++;
-            if ($lotPenya > 0) $penyaCount++;
-            if ($lotTolangan > 0) $tolanganCount++;
-            if ($lotKutilmoqda > 0) $kutilmoqdaCount++;
-            if (($lotQarz + $lotKutilmoqda) > 0) $qarzdorCount++;
-        }
-
-                // Count unique lots from filtered contracts
-        $filteredLotIds = $contracts->pluck('lot_id')->unique();
-
-        // Calculate total area (umumiy maydon) from active lots
-        $umumiyMaydon = Lot::whereIn('id', $filteredLotIds)->sum('maydon');
-
-        $stats = [
-            'faol_shartnomalar' => $contracts->count(),
-            'jami_shartnoma_summasi' => $contracts->sum('shartnoma_summasi'),
-            'jami_tolangan' => $jamiTolangan,
-            'jami_kutilgan' => $jamiKutilgan, // Plan: expected payments till today
-            'jami_qarzdorlik' => $jamiMuddatiOtganQarz, // ONLY past due debt
-            'muddati_otmagan_qarz' => $jamiMuddatiOtmaganQarz, // Not yet due
-            'jami_qoldiq' => $jamiMuddatiOtganQarz + $jamiMuddatiOtmaganQarz, // Total remaining
-            'jami_penya' => max(0, $jamiPenya),
-            'qarzdorlar_soni' => $contracts->filter(function($c) use ($bugun) {
-                return $c->paymentSchedules->filter(function($s) use ($bugun) {
-                    $effectiveDeadline = $s->custom_oxirgi_muddat ?? $s->oxirgi_muddat;
-                    return Carbon::parse($effectiveDeadline)->lt($bugun) && $s->qoldiq_summa > 0;
-                })->count() > 0;
-            })->count(),
-            'jami_lotlar' => $filteredLotIds->count(), // From filtered contracts
-            'ijaradagi_lotlar' => $contracts->count(), // Contracts = active lots in this year
-            'bosh_lotlar' => Lot::where('holat', 'bosh')->count(),
-            'jami_ijarachilar' => Tenant::count(), // All tenants (consistent with tenants page)
-            'umumiy_maydon' => $umumiyMaydon, // Total area in m²
-            // Counts for card links
-            'muddati_otgan_count' => $muddatiOtganCount,
-            'muddati_otgan_soni' => $muddatiOtganCount, // For home.blade.php compatibility
-            'penya_count' => $penyaCount,
-            'tolangan_count' => $tolanganCount,
-            'kutilmoqda_count' => $kutilmoqdaCount,
-            'qarzdor_count' => $qarzdorCount,
-            'tolovlar_soni' => Payment::where('holat', 'tasdiqlangan')->count(), // Total approved payments
-        ];
-
-        // Years list
-        $years = Contract::selectRaw('YEAR(boshlanish_sanasi) as year')
-            ->distinct()
-            ->orderBy('year', 'desc')
-            ->pluck('year')
-            ->toArray();
-
-        if (empty($years)) {
-            $years = [date('Y')];
-        }
-
-        // Chart data - now respects year and period filter
-        $chartData = $this->getChartData($year, $period, $contracts);
-
-        // Filtered contracts list for display
-        $filteredContracts = $contracts->map(function ($c) use ($bugun) {
-            // Only past-due debt counts as real debt (using effective deadline)
-            $c->qarz = $c->paymentSchedules
-                ->filter(function($s) use ($bugun) {
-                    $effectiveDeadline = $s->custom_oxirgi_muddat ?? $s->oxirgi_muddat;
-                    return Carbon::parse($effectiveDeadline)->lt($bugun);
-                })
-                ->sum('qoldiq_summa');
-            $c->penya = $c->paymentSchedules->sum('penya_summasi') - $c->paymentSchedules->sum('tolangan_penya');
-            $c->tolangan = $c->paymentSchedules->sum('tolangan_summa');
-            $overdueSchedules = $c->paymentSchedules->filter(function($s) use ($bugun) {
-                $effectiveDeadline = $s->custom_oxirgi_muddat ?? $s->oxirgi_muddat;
-                return Carbon::parse($effectiveDeadline)->lt($bugun) && $s->qoldiq_summa > 0;
-            });
-            $c->kechikish_kunlari = $overdueSchedules->count() > 0
-                ? $overdueSchedules->max(function($s) use ($bugun) {
-                    $effectiveDeadline = $s->custom_oxirgi_muddat ?? $s->oxirgi_muddat;
-                    return Carbon::parse($effectiveDeadline)->diffInDays($bugun);
-                })
-                : 0;
-            return $c;
-        })->sortByDesc('qarz')->take(20)->values();
-
-        // Recent payments
-        $recentPayments = Payment::with(['contract.tenant'])
-            ->latest('tolov_sanasi')
-            ->take(10)
-            ->get();
-
-        // Filter params to pass to view
-        $filters = [
-            'search' => $search,
-            'status' => $status,
-            'min_amount' => $minAmount,
-            'max_amount' => $maxAmount,
-        ];
-
-        return view('home', compact(
-            'stats', 'years', 'year', 'period', 'chartData',
-            'filteredContracts', 'recentPayments', 'filters'
-        ));
-    }
-
-    private function getChartData($year, $period, $contracts = null)
-    {
-        $data = [
-            'labels' => [],
-            'kutilgan' => [],
-            'tolangan' => [],
-            'qarz' => [],
-            'penya' => [],
-        ];
-
-        // Use current year for charts if no year specified
-        $chartYear = $year ?: date('Y');
-
-        $bugun = Carbon::today();
-
-        // Only filter by contract IDs if a specific year was selected
-        // When showing all years, show all data for the chart year
-        $contractIds = ($year && $contracts) ? $contracts->pluck('id')->toArray() : [];
-
-        if ($period === 'month') {
-            $months = ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'Iyn', 'Iyl', 'Avg', 'Sen', 'Okt', 'Noy', 'Dek'];
-            for ($m = 1; $m <= 12; $m++) {
-                $data['labels'][] = $months[$m - 1];
-
-                $query = \App\Models\PaymentSchedule::whereYear('tolov_sanasi', $chartYear)
-                    ->whereMonth('tolov_sanasi', $m);
-
-                if (!empty($contractIds)) {
-                    $query->whereIn('contract_id', $contractIds);
-                }
-
-                $schedules = $query->get();
-
-                $data['kutilgan'][] = $schedules->sum('tolov_summasi');
-                $data['tolangan'][] = $schedules->sum('tolangan_summa');
-                // Only count past-due debt
-                $data['qarz'][] = $schedules->filter(fn($s) =>
-                    Carbon::parse($s->oxirgi_muddat)->lt($bugun) && $s->qoldiq_summa > 0
-                )->sum('qoldiq_summa');
-                $data['penya'][] = $schedules->sum('penya_summasi') - $schedules->sum('tolangan_penya');
-            }
-        } elseif ($period === 'quarter') {
-            $quarters = ['Q1 (Yan-Mar)', 'Q2 (Apr-Iyn)', 'Q3 (Iyl-Sen)', 'Q4 (Okt-Dek)'];
-            $quarterMonths = [[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]];
-
-            foreach ($quarters as $i => $label) {
-                $data['labels'][] = $label;
-
-                $query = \App\Models\PaymentSchedule::whereYear('tolov_sanasi', $chartYear)
-                    ->whereIn(DB::raw('MONTH(tolov_sanasi)'), $quarterMonths[$i]);
-
-                if (!empty($contractIds)) {
-                    $query->whereIn('contract_id', $contractIds);
-                }
-
-                $schedules = $query->get();
-
-                $data['kutilgan'][] = $schedules->sum('tolov_summasi');
-                $data['tolangan'][] = $schedules->sum('tolangan_summa');
-                $data['qarz'][] = $schedules->filter(fn($s) =>
-                    Carbon::parse($s->oxirgi_muddat)->lt($bugun) && $s->qoldiq_summa > 0
-                )->sum('qoldiq_summa');
-                $data['penya'][] = $schedules->sum('penya_summasi') - $schedules->sum('tolangan_penya');
-            }
-        } else {
-            // Yearly - last 5 years
-            for ($y = $chartYear - 4; $y <= $chartYear; $y++) {
-                $data['labels'][] = $y;
-
-                $query = \App\Models\PaymentSchedule::whereYear('tolov_sanasi', $y);
-
-                if (!empty($contractIds)) {
-                    $query->whereIn('contract_id', $contractIds);
-                }
-
-                $schedules = $query->get();
-
-                $data['kutilgan'][] = $schedules->sum('tolov_summasi');
-                $data['tolangan'][] = $schedules->sum('tolangan_summa');
-                $data['qarz'][] = $schedules->filter(fn($s) =>
-                    Carbon::parse($s->oxirgi_muddat)->lt($bugun) && $s->qoldiq_summa > 0
-                )->sum('qoldiq_summa');
-                $data['penya'][] = $schedules->sum('penya_summasi') - $schedules->sum('tolangan_penya');
-            }
-        }
-
-        return $data;
-    }
-
     // ==================== DATA CENTER ====================
     public function dataCenter(Request $request)
     {
@@ -438,17 +101,16 @@ class WebController extends Controller
         }
         $totalPaid = max(0, (float) $paidQuery->sum('summa') - (float) abs($refundQuery->sum('summa')));
 
-        // "Jami Penya" — LIVE hisoblash: har bir qoldiqli jadval uchun
-        // penya_summasi'ni bugungi sanaga qarab (save QILINMASDAN) hisoblaymiz.
-        // Shunday qilib, hech kim lot sahifasiga kirmagan bo'lsa ham asosiy
-        // sahifada hisoblangan penya ko'rinib turadi.
+        // "Jami Penya" — har bir qoldiqli grafik uchun bugungi sanaga
+        // penya_summasi'ni MONOTON ravishda yangilaymiz va DBga saqlaymiz.
+        // To'liq to'langan grafiklarda esa avval saqlangan (muzlatilgan)
+        // qiymat o'qiladi — penya hech qachon yo'qolmaydi.
         $totalPenya = 0.0;
         foreach ($filteredSchedules as $s) {
-            if ((float) $s->qoldiq_summa <= 0) {
-                continue;
+            if ((float) $s->qoldiq_summa > 0) {
+                $s->calculatePenyaAtDate($bugun, true);
             }
-            $calc = (float) $s->calculatePenyaAtDate($bugun, false);
-            $unpaid = $calc - (float) $s->tolangan_penya;
+            $unpaid = (float) $s->penya_summasi - (float) $s->tolangan_penya;
             if ($unpaid > 0) {
                 $totalPenya += $unpaid;
             }
@@ -536,6 +198,14 @@ class WebController extends Controller
         $maxYear = max(date('Y'), !empty($allYears) ? max($allYears) : date('Y'));
         $years = range($maxYear, $minYear); // descending order
 
+        // ────────────────────────────────────────────────────────────────
+        //  JORIY OY (Current Month) — alohida hisoblash
+        // ────────────────────────────────────────────────────────────────
+        // Faqat shu kalendar oydagi grafiklar bo'yicha plan/qoldiq/penya
+        // yig'iladi. Bu — foydalanuvchiga "shu oyda nechta pul kerak" degan
+        // savolga aniq javob beradi.
+        $currentMonth = $this->buildCurrentMonthSummary($bugun);
+
         return view('data-center', compact(
             'totalLots', 'activeLots', 'vacantLots', 'umumiyMaydon',
             'activeContracts', 'expiredContracts', 'totalContractValue',
@@ -545,8 +215,66 @@ class WebController extends Controller
             'overdueDebt', 'overdueCount', 'notYetDueDebt', 'notYetDueCount',
             'paidPercent', 'debtPercent', 'overduePercent',
             'monthlyData', 'statusData', 'districtData',
-            'years', 'year', 'period', 'status', 'chartYear'
+            'years', 'year', 'period', 'status', 'chartYear',
+            'currentMonth'
         ));
+    }
+
+    /**
+     * Joriy kalendar oy bo'yicha xulosa.
+     *
+     * @return array{
+     *   year:int, month:int, label:string,
+     *   plan:float, paid:float, debt:float, penalty:float,
+     *   overdue_count:int, paid_count:int, total_count:int,
+     *   collection_percent:float
+     * }
+     */
+    private function buildCurrentMonthSummary(Carbon $today): array
+    {
+        $monthSchedules = \App\Models\PaymentSchedule::with('contract')
+            ->where('yil', $today->year)
+            ->where('oy', $today->month)
+            ->get();
+
+        $plan = (float) $monthSchedules->sum('tolov_summasi');
+        $debt = (float) $monthSchedules->sum('qoldiq_summa');
+        $paid = (float) $monthSchedules->sum('tolangan_summa');
+        $totalCount = $monthSchedules->count();
+        $paidCount = $monthSchedules->where('qoldiq_summa', '<=', 0)->count();
+
+        $overdueCount = 0;
+        $penalty = 0.0;
+        foreach ($monthSchedules as $s) {
+            $effDeadline = $s->custom_oxirgi_muddat ?? $s->oxirgi_muddat;
+            if ((float) $s->qoldiq_summa > 0 && Carbon::parse($effDeadline)->lt($today)) {
+                $overdueCount++;
+                $s->calculatePenyaAtDate($today, true);
+            }
+            $unpaidPenya = (float) $s->penya_summasi - (float) $s->tolangan_penya;
+            if ($unpaidPenya > 0) {
+                $penalty += $unpaidPenya;
+            }
+        }
+
+        $collectionPercent = $plan > 0 ? round(($paid / $plan) * 100, 1) : 0.0;
+
+        $oyNomi = ['Yanvar','Fevral','Mart','Aprel','May','Iyun',
+                   'Iyul','Avgust','Sentabr','Oktabr','Noyabr','Dekabr'];
+
+        return [
+            'year' => $today->year,
+            'month' => $today->month,
+            'label' => $oyNomi[$today->month - 1] . ' ' . $today->year,
+            'plan' => $plan,
+            'paid' => $paid,
+            'debt' => $debt,
+            'penalty' => max(0.0, $penalty),
+            'overdue_count' => $overdueCount,
+            'paid_count' => $paidCount,
+            'total_count' => $totalCount,
+            'collection_percent' => $collectionPercent,
+        ];
     }
 
     private function getDataCenterChartData($chartYear, $period)
@@ -911,59 +639,56 @@ class WebController extends Controller
 
         $today = Carbon::today();
 
-        // Get latest contract (active or expired)
-        // For lots with expired contracts, we still want to show the data
+        // Eng so'nggi shartnoma (faol yoki tugagan) — tarixiy ma'lumotni
+        // ko'rsatish uchun ham
         $contract = $lot->contracts->sortByDesc('id')->first();
 
-        // Calculate penalties for active contract
+        // Penyani bugungi sanaga MONOTON ravishda saqlab qo'yish
         if ($contract) {
             foreach ($contract->paymentSchedules as $schedule) {
-                if ($schedule->qoldiq_summa > 0) {
-                    $schedule->calculatePenya();
+                if ((float) $schedule->qoldiq_summa > 0) {
+                    $schedule->calculatePenyaAtDate($today, true);
                 }
             }
-            // Reload to get updated penalty values
             $contract->load('paymentSchedules');
         }
 
-        // Calculate statistics from REAL payments (not calculated schedules)
         $stats = null;
+        $currentMonth = null;
         if ($contract) {
-            // Get only approved payments (not refunds)
             $approvedPayments = $contract->payments->where('holat', 'tasdiqlangan');
-            $realPaid = $approvedPayments->sum('summa');
+            $realPaid = (float) $approvedPayments->sum('summa');
 
-            // Get refunds
             $refunds = $contract->payments->where('holat', 'qaytarilgan');
-            $refundSum = abs($refunds->sum('summa'));
+            $refundSum = (float) abs($refunds->sum('summa'));
 
-            // Net paid = real payments - refunds
             $netPaid = $realPaid - $refundSum;
 
-            // Debt (QOLDIQ) = only unpaid installments whose payment date has passed
             $overdueDebt = $contract->paymentSchedules->filter(function ($schedule) use ($today) {
                 if ($schedule->qoldiq_summa <= 0) {
                     return false;
                 }
-
                 $paymentDate = $schedule->tolov_sanasi;
                 return $paymentDate && Carbon::parse($paymentDate)->lt($today);
             })->sum('qoldiq_summa');
 
             $stats = [
-                'jami_summa' => $contract->shartnoma_summasi,
-                'tolangan' => $netPaid, // Real payments minus refunds
-                'qoldiq' => $overdueDebt,
-                'penya' => max(0, $contract->paymentSchedules->sum('penya_summasi') - $contract->paymentSchedules->sum('tolangan_penya')),
+                'jami_summa' => (float) $contract->shartnoma_summasi,
+                'tolangan' => $netPaid,
+                'qoldiq' => (float) $overdueDebt,
+                'penya' => max(0.0,
+                    (float) $contract->paymentSchedules->sum('penya_summasi')
+                    - (float) $contract->paymentSchedules->sum('tolangan_penya')
+                ),
                 'real_payments' => $realPaid,
                 'refunds' => $refundSum,
             ];
+
+            $currentMonth = $this->buildContractCurrentMonth($contract, $today);
         }
 
-        // Get schedule display data from service
         $scheduleService = new ScheduleDisplayService();
         if ($contract) {
-            // Get current period dates from ContractPeriodService
             $periodService = \App\Services\ContractPeriodService::forContract($contract);
             $currentPeriod = $periodService->getCurrentPeriod();
 
@@ -972,17 +697,108 @@ class WebController extends Controller
                 'end' => $currentPeriod['end'],
             ] : null;
 
-            // Get current period data (12 months)
             $scheduleDisplayData = $scheduleService->getScheduleDisplayData($contract, $periodDates);
-
-            // Get ALL schedules data for "Barcha oylik tafsilotlar" section
-            $allSchedulesData = $scheduleService->getScheduleDisplayData($contract, null); // null = all schedules
+            $allSchedulesData = $scheduleService->getScheduleDisplayData($contract, null);
         } else {
-            $scheduleDisplayData = ['schedules' => [], 'is_contract_expired' => false, 'reference_date' => $today->format('Y-m-d')];
-            $allSchedulesData = ['schedules' => [], 'is_contract_expired' => false, 'reference_date' => $today->format('Y-m-d')];
+            $empty = ['schedules' => [], 'is_contract_expired' => false, 'reference_date' => $today->format('Y-m-d')];
+            $scheduleDisplayData = $empty;
+            $allSchedulesData = $empty;
         }
 
-        return view('blade.lots.show', compact('lot', 'contract', 'stats', 'scheduleDisplayData', 'allSchedulesData'));
+        return view('blade.lots.show', compact(
+            'lot', 'contract', 'stats',
+            'scheduleDisplayData', 'allSchedulesData', 'currentMonth'
+        ));
+    }
+
+    /**
+     * Shartnomaning JORIY kalendar oyi bo'yicha qisqacha xulosasini qaytaradi.
+     *
+     * @return array{
+     *   year:int, month:int, label:string,
+     *   has_schedule:bool, schedule_id:?int,
+     *   plan:float, paid:float, debt:float, penalty:float,
+     *   tolov_sanasi:?string, oxirgi_muddat:?string, effective_deadline:?string,
+     *   is_overdue:bool, overdue_days:int, days_left:int, status:?string,
+     *   sahifa_xulosa:string
+     * }
+     */
+    private function buildContractCurrentMonth(Contract $contract, Carbon $today): array
+    {
+        $oyNomi = ['Yanvar','Fevral','Mart','Aprel','May','Iyun',
+                   'Iyul','Avgust','Sentabr','Oktabr','Noyabr','Dekabr'];
+
+        $schedule = $contract->paymentSchedules
+            ->first(fn ($s) => (int) $s->yil === $today->year && (int) $s->oy === $today->month);
+
+        if (!$schedule) {
+            return [
+                'year' => $today->year,
+                'month' => $today->month,
+                'label' => $oyNomi[$today->month - 1] . ' ' . $today->year,
+                'has_schedule' => false,
+                'schedule_id' => null,
+                'plan' => 0.0,
+                'paid' => 0.0,
+                'debt' => 0.0,
+                'penalty' => 0.0,
+                'tolov_sanasi' => null,
+                'oxirgi_muddat' => null,
+                'effective_deadline' => null,
+                'is_overdue' => false,
+                'overdue_days' => 0,
+                'days_left' => 0,
+                'status' => null,
+                'sahifa_xulosa' => 'Bu oyda to\'lov grafigi yo\'q.',
+            ];
+        }
+
+        $effDeadline = $schedule->custom_oxirgi_muddat ?? $schedule->oxirgi_muddat;
+        $deadlineCarbon = Carbon::parse($effDeadline);
+        $isOverdue = (float) $schedule->qoldiq_summa > 0 && $deadlineCarbon->lt($today);
+        $overdueDays = $isOverdue ? (int) $deadlineCarbon->diffInDays($today) : 0;
+        $daysLeft = $deadlineCarbon->isFuture() ? (int) $today->diffInDays($deadlineCarbon, false) : 0;
+
+        $penalty = max(0.0, (float) $schedule->penya_summasi - (float) $schedule->tolangan_penya);
+
+        $debt = (float) $schedule->qoldiq_summa;
+
+        if ($debt <= 0) {
+            $xulosa = "Joriy oy to'liq to'langan.";
+        } elseif ($isOverdue) {
+            $xulosa = sprintf(
+                "Bu oyda %s so'm to'lash kerak (muddati %d kun oldin o'tgan).",
+                number_format($debt, 0, '.', ' '),
+                $overdueDays
+            );
+        } else {
+            $xulosa = sprintf(
+                "Bu oy uchun %s so'm kutilmoqda (muddat %s, %d kun qoldi).",
+                number_format($debt, 0, '.', ' '),
+                $deadlineCarbon->format('d.m.Y'),
+                $daysLeft
+            );
+        }
+
+        return [
+            'year' => (int) $schedule->yil,
+            'month' => (int) $schedule->oy,
+            'label' => $oyNomi[(int) $schedule->oy - 1] . ' ' . (int) $schedule->yil,
+            'has_schedule' => true,
+            'schedule_id' => $schedule->id,
+            'plan' => (float) $schedule->tolov_summasi,
+            'paid' => (float) $schedule->tolangan_summa,
+            'debt' => $debt,
+            'penalty' => $penalty,
+            'tolov_sanasi' => optional($schedule->tolov_sanasi)->format('Y-m-d'),
+            'oxirgi_muddat' => optional($schedule->oxirgi_muddat)->format('Y-m-d'),
+            'effective_deadline' => $deadlineCarbon->format('Y-m-d'),
+            'is_overdue' => $isOverdue,
+            'overdue_days' => $overdueDays,
+            'days_left' => $daysLeft,
+            'status' => $schedule->holat,
+            'sahifa_xulosa' => $xulosa,
+        ];
     }
 
     public function lotsStore(Request $request)
