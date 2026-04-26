@@ -644,13 +644,7 @@ class WebController extends Controller
         // ko'rsatish uchun ham
         $contract = $lot->contracts->sortByDesc('id')->first();
 
-        // Qoldiqli grafiklar: bugun bo'yicha penya
         if ($contract) {
-            foreach ($contract->paymentSchedules as $schedule) {
-                if ((float) $schedule->qoldiq_summa > 0) {
-                    $schedule->calculatePenyaAtDate($today, true);
-                }
-            }
             $contract->load('paymentSchedules');
         }
 

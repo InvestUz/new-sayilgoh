@@ -13,8 +13,8 @@ use Illuminate\Support\Facades\Storage;
  * PenaltyNotificationService - Generate penalty notifications (Bildirg'inoma)
  *
  * Contract clause 8.2 compliance:
- * - 0,4% × kun: faqat fakt tushum (asos) × kechikish
- * - Fakt bo‘lmasa penya 0
+ * - 0,4% × kun: muddati o'tgan qarz (qoldiq) × kechikish
+ * - Qarz bo'lmasa penya 0
  */
 class PenaltyNotificationService
 {
@@ -25,7 +25,7 @@ class PenaltyNotificationService
     /**
      * Calculate penalty using contract-compliant formula
      *
-     * @param float $overdueAmount Fakt tushum (actual payment) — penya asosi
+        * @param float $overdueAmount Muddati o'tgan qarz (qoldiq) — penya asosi
      * @param Carbon $dueDate Due date (oxirgi muddat)
      * @param Carbon $paymentDate Payment date (or calculation date)
      * @return array Calculation details
@@ -48,7 +48,7 @@ class PenaltyNotificationService
         ];
 
         if ($overdueAmount <= 0) {
-            $result['formula_text'] = "Fakt tushum yo'q - penya 0 (ushbu qoida)";
+            $result['formula_text'] = "Qarz yo'q - penya 0";
             return $result;
         }
 
@@ -64,7 +64,7 @@ class PenaltyNotificationService
         $overdueDays = $dueDate->diffInDays($paymentDate);
         $result['overdue_days'] = $overdueDays;
 
-        // Rule 2: penalty = fakt * 0.004 * overdue_days
+        // Rule 2: penalty = qarz * 0.004 * overdue_days
         $calculatedPenalty = $overdueAmount * self::PENALTY_RATE * $overdueDays;
         $result['calculated_penalty'] = round($calculatedPenalty, 2);
 
@@ -159,8 +159,8 @@ TEXT;
             throw new \InvalidArgumentException("No unpaid schedule found for this contract");
         }
 
-        $dueDate = Carbon::parse($schedule->oxirgi_muddat);
-        $overdueAmount = (float) $schedule->tolangan_summa;
+        $dueDate = $this->resolveEffectiveDeadline($schedule, $contract);
+        $overdueAmount = (float) $schedule->qoldiq_summa;
 
         // Calculate penalty
         $calculation = $this->calculatePenalty($overdueAmount, $dueDate, $asOfDate);
@@ -463,7 +463,7 @@ HTML;
 
         if ($schedule) {
             $result['system'] = [
-                'overdue_amount' => $schedule->tolangan_summa,
+                'overdue_amount' => $schedule->qoldiq_summa,
                 'penalty' => $schedule->penya_summasi,
                 'overdue_days' => $schedule->kechikish_kunlari,
             ];
@@ -502,5 +502,23 @@ HTML;
         return PenaltyNotification::where('contract_id', $contract->id)
             ->orderBy('notification_date', 'desc')
             ->get();
+    }
+
+    /**
+     * Effective deadline for calculator/notification consistency.
+     */
+    private function resolveEffectiveDeadline(PaymentSchedule $schedule, ?Contract $contract = null): Carbon
+    {
+        if (!empty($schedule->custom_oxirgi_muddat)) {
+            return Carbon::parse($schedule->custom_oxirgi_muddat);
+        }
+
+        $isFirstRow = (int) ($schedule->oy_raqami ?? 0) === 1;
+        $contract = $contract ?? $schedule->contract;
+        if ($isFirstRow && $contract && !empty($contract->boshlanish_sanasi)) {
+            return Carbon::parse($contract->boshlanish_sanasi);
+        }
+
+        return Carbon::parse($schedule->oxirgi_muddat);
     }
 }

@@ -157,14 +157,6 @@ class ScheduleDisplayService
             $contract
         );
 
-        // Calculate penalty
-        $penaltyData = $this->calculatePenalty(
-            $schedule,
-            $daysData['overdue_days'],
-            $daysData['is_overdue'],
-            $isContractExpired
-        );
-
         // Fakt tushgan: ushbu grafik oyida real naqd tushgan to'lovlar
         // (tolov_sanasi ayni shu yil-oyda bo'lgan tasdiqlangan to'lovlar yig'indisi).
         // Bu qiymat FIFO taqsimotidan mustaqil — tenant fakti qaysi oyda qancha
@@ -178,6 +170,9 @@ class ScheduleDisplayService
             ->sortBy('tolov_sanasi')
             ->values();
         $faktTushgan = (float) $faktPayments->sum('summa');
+        $faktMuddatgacha = (float) $faktPayments
+            ->filter(fn ($p) => Carbon::parse($p->tolov_sanasi)->startOfDay()->lte($deadline->copy()->startOfDay()))
+            ->sum('summa');
         $faktDocs = $faktPayments->map(function ($p) {
             return [
                 'id' => $p->id,
@@ -190,10 +185,52 @@ class ScheduleDisplayService
 
         // Jadvaldagi "qoldiq" = max(0, grafik - fakt) — row izoh/ochilish DB qoldiq emas, shu formula
         $qJadval = max(0.0, $grafikKoRinish - $faktTushgan);
+        // Penya bazasi: muddat kelgan paytdagi qarz (muddatgacha tushgan faktni ayirgandan keyin)
+        $qMuddatga = max(0.0, $grafikKoRinish - $faktMuddatgacha);
+
+        // Display overdue status must follow display debt (qJadval), not DB FIFO debt.
+        $deadlineDay = $deadline->copy()->startOfDay();
+        $todayDay = $today->copy()->startOfDay();
+        $paymentDateForDisplay = null;
+        if (!empty($daysData['payment_date'])) {
+            try {
+                $paymentDateForDisplay = Carbon::createFromFormat('d.m.Y', $daysData['payment_date'])->startOfDay();
+            } catch (\Throwable $e) {
+                $paymentDateForDisplay = null;
+            }
+        }
+
+        // Universal rule for ALL rows:
+        // - payment date due'dan keyin bo'lsa: due -> payment date (muzlatiladi)
+        // - aks holda: due -> today
+        // and only while penalty base debt exists.
+        $delayAsOf = ($paymentDateForDisplay && $paymentDateForDisplay->gt($deadlineDay))
+            ? $paymentDateForDisplay
+            : $todayDay;
+        $displayIsOverdue = $qMuddatga > 0.0001 && $delayAsOf->gt($deadlineDay);
+        $displayOverdueDays = $displayIsOverdue ? (int) $deadlineDay->diffInDays($delayAsOf) : 0;
+
+        $displayDaysLeft = (!$displayIsOverdue && $qMuddatga > 0.0001 && $todayDay->lte($deadlineDay))
+            ? (int) $todayDay->diffInDays($deadlineDay)
+            : 0;
+        $displayDaysData = [
+            'is_overdue' => $displayIsOverdue,
+            'overdue_days' => $displayOverdueDays,
+            'days_left' => $displayDaysLeft,
+            'payment_date' => $daysData['payment_date'],
+        ];
+
+        // Penya display-only: jadval qoldig'i asosida hisoblanadi (DB write yo'q)
+        $penaltyData = $this->calculatePenalty(
+            $qMuddatga,
+            $displayDaysData['overdue_days'],
+            $displayDaysData['is_overdue'],
+            (float) ($schedule->tolangan_penya ?? 0)
+        );
 
         $rowMeta = $this->buildJadvalRowMeta(
             $schedule,
-            $daysData,
+            $displayDaysData,
             $penaltyData,
             $deadline,
             $today,
@@ -216,7 +253,7 @@ class ScheduleDisplayService
             // Jadval Qoldiq: reja (ko'rsatiladigan grafik) - shu kalendar oy fakt, pastki 0. Tizim ichidagi kassa (FIFO) alohida.
             $qoldiqForDisplay = max(0.0, $grafikKoRinish - $faktTushgan);
         }
-        $hasActiveDebtDisplay = $qoldiqForDisplay > 0.0001 && $daysData['is_overdue'];
+        $hasActiveDebtDisplay = $qoldiqForDisplay > 0.0001 && $displayDaysData['is_overdue'];
 
         $penyaSummasi = $qarzKo === 'kutilayotgan' ? 0.0 : (float) $penaltyData['penya_summasi'];
         $qoldiqPenya = $qarzKo === 'kutilayotgan' ? 0.0 : (float) $penaltyData['qoldiq_penya'];
@@ -242,12 +279,12 @@ class ScheduleDisplayService
             'oxirgi_muddat' => $schedule->oxirgi_muddat,
             'custom_oxirgi_muddat' => $schedule->custom_oxirgi_muddat,
             'effective_deadline' => $deadline->format('Y-m-d'),
-            'payment_date' => $daysData['payment_date'],
+            'payment_date' => $displayDaysData['payment_date'],
 
             // Days and overdue
-            'days_left' => $qarzKo === 'kutilayotgan' ? 0 : $daysData['days_left'],
-            'overdue_days' => $daysData['overdue_days'],
-            'is_overdue' => $daysData['is_overdue'],
+            'days_left' => $qarzKo === 'kutilayotgan' ? 0 : $displayDaysData['days_left'],
+            'overdue_days' => $displayDaysData['overdue_days'],
+            'is_overdue' => $displayDaysData['is_overdue'],
 
             // Jadval: Qoldiq/Kun/izoh (FIFO+penya tufayli "bo'sh" qatorlarni tushuntirish)
             'kechikish_kunlari' => $qarzKo === 'kutilayotgan' ? 0 : (int) ($schedule->kechikish_kunlari ?? 0),
@@ -523,20 +560,26 @@ class ScheduleDisplayService
     }
 
     /**
-     * Penyani ko'rsatish uchun tayyorlash.
+     * Penyani ko'rsatish uchun tayyorlash (display-only).
      *
-     * Manba: PaymentSchedule.penya_summasi (DBda saqlangan haqiqiy tarixiy
-     * qiymat). Bu yerda QAYTA hisob qilmaymiz — yo'qotmaslik kafolati
-     * `PaymentSchedule::calculatePenyaAtDate` orqali ta'minlanadi.
+     * Formula: overdue_qoldiq * 0.004 * overdue_days, max 50%.
+     * Bu hisob faqat UI uchun, DB ga yozilmaydi.
      */
     private function calculatePenalty(
-        PaymentSchedule $schedule,
+        float $overdueBase,
         int $overdueDays,
         bool $isOverdue,
-        bool $isContractExpired
+        float $tolanganPenya
     ): array {
-        $penyaSummasi = (float) ($schedule->penya_summasi ?? 0);
-        $tolanganPenya = (float) ($schedule->tolangan_penya ?? 0);
+        $overdueBase = max(0.0, $overdueBase);
+        if (! $isOverdue || $overdueDays <= 0 || $overdueBase <= 0) {
+            $penyaSummasi = 0.0;
+        } else {
+            $maxPenalty = $overdueBase * PaymentSchedule::MAX_PENYA_RATE;
+            $penyaSummasi = min($overdueBase * PaymentSchedule::PENYA_RATE * $overdueDays, $maxPenalty);
+        }
+
+        $tolanganPenya = max(0.0, $tolanganPenya);
         $qoldiqPenya = max(0.0, $penyaSummasi - $tolanganPenya);
 
         return [

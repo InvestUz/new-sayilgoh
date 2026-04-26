@@ -37,7 +37,19 @@
             $tolanganPenya = $scheduleData['tolangan_penya'];
             $penyaHisob = $scheduleData['penya_summasi'];
             $qoldiqPenya = $scheduleData['qoldiq_penya'];
-            $lastPaymentDate = $scheduleData['payment_date'] ? \Carbon\Carbon::parse($scheduleData['payment_date']) : null;
+            $faktDocsForDate = $scheduleData['fakt_payments'] ?? [];
+            $paymentDatesAll = collect($faktDocsForDate)
+                ->pluck('sana')
+                ->filter()
+                ->unique()
+                ->values();
+            $paymentDatesCount = $paymentDatesAll->count();
+            $lastPaymentDateText = $paymentDatesCount > 0
+                ? $paymentDatesAll->last()
+                : ($scheduleData['payment_date'] ?? null);
+            $paymentDateTooltip = $paymentDatesCount > 0
+                ? collect($faktDocsForDate)->map(fn($d) => ($d['sana'] ?? '—') . ': +' . number_format((float) ($d['summa'] ?? 0), 0, ',', ' ') . (($d['hujjat'] ?? null) ? ' (' . $d['hujjat'] . ')' : ''))->implode("\n")
+                : null;
             $highlightDebt = $scheduleData['highlight_active_debt'] ?? false;
             $kunK = $scheduleData['kun_ko_rinishi'] ?? null;
             $kunTitleCell = trim(($scheduleData['muddat_ozgarish_izoh'] ?? '') . (empty($scheduleData['kun_ko_rinishi_izoh']) ? '' : ' ' . $scheduleData['kun_ko_rinishi_izoh']));
@@ -93,7 +105,17 @@
                     title="{{ collect($faktDocs)->map(fn($d) => $d['sana'].': +'.number_format($d['summa'],0,',',' ').($d['hujjat'] ? ' ('.$d['hujjat'].')' : ''))->implode('&#10;') }}"
                 @endif
             >{{ $ft > 0 ? '+'.number_format($ft, 0, ',', ' ') : '—' }}</td>
-            <td class="border border-slate-600 px-2 py-1 text-center text-slate-400">{{ $lastPaymentDate ? $lastPaymentDate->format('d.m.Y') : '—' }}</td>
+            <td class="border border-slate-600 px-2 py-1 text-center text-slate-400"
+                @if($paymentDateTooltip) title="{{ $paymentDateTooltip }}" @endif>
+                @if($lastPaymentDateText)
+                    <span class="text-slate-300">{{ $lastPaymentDateText }}</span>
+                    @if($paymentDatesCount > 1)
+                        <span class="ml-1 inline-flex items-center px-1 py-0.5 rounded bg-slate-700/20">{{ $paymentDatesCount }} ta</span>
+                    @endif
+                @else
+                    —
+                @endif
+            </td>
             <td class="border border-slate-600 px-2 py-1 text-right align-top {{ $scheduleData['qoldiq_summa'] > 0 ? 'text-red-400' : 'text-slate-200' }}"
                 @if(!empty($scheduleData['qoldiq_usti_title'])) title="{{ e($scheduleData['qoldiq_usti_title']) }}" @endif
             >
