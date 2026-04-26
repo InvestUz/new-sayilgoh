@@ -6,6 +6,7 @@ use App\Models\Contract;
 use App\Models\Lot;
 use App\Models\Payment;
 use App\Models\Tenant;
+use App\Services\ContractPeriodService;
 use App\Services\ContractYearPeriodsService;
 use App\Services\PaymentApplicator;
 use App\Services\ScheduleDisplayService;
@@ -667,18 +668,36 @@ class WebController extends Controller
         $allSchedulesData = $emptySchedules;
         $lotYearPeriods = $this->emptyLotYearPeriodsViewData();
 
-        if ($contract) {
-            $periodService = \App\Services\ContractPeriodService::forContract($contract);
-            $currentPeriod = $periodService->getCurrentPeriod();
-            $periodDates = $currentPeriod ? [
-                'start' => $currentPeriod['start'],
-                'end' => $currentPeriod['end'],
-            ] : null;
+        $scheduleDisplayUsesPeriod = false;
+        $hasSeparateAllMonthsView = false;
+        $lotCurrentPeriod = null;
 
-            $scheduleDisplayData = $scheduleService->getScheduleDisplayData($contract, $periodDates);
+        if ($contract) {
+            // Kartochkalar: barcha oylar yig'indisi; oylik jadval: avvalo joriy 12-oylik davr
             $allSchedulesData = $scheduleService->getScheduleDisplayData($contract, null);
+            $scheduleDisplayData = $allSchedulesData;
+
+            $periodService = ContractPeriodService::forContract($contract, $today);
+            $currentP = $periodService->getCurrentPeriod();
+            if ($currentP) {
+                $lotCurrentPeriod = [
+                    'num' => $currentP['num'],
+                    'start' => $currentP['start'],
+                    'end' => $currentP['end'],
+                ];
+                $filtered = $scheduleService->getScheduleDisplayData($contract, [
+                    'start' => $currentP['start'],
+                    'end' => $currentP['end'],
+                ]);
+                if (!empty($filtered['schedules'] ?? null)) {
+                    $scheduleDisplayData = $filtered;
+                    $scheduleDisplayUsesPeriod = true;
+                }
+            }
 
             $totals = $allSchedulesData['totals'] ?? $scheduleService->aggregateDisplayTotals([]);
+            $hasSeparateAllMonthsView = $scheduleDisplayUsesPeriod
+                && count($allSchedulesData['schedules'] ?? []) > count($scheduleDisplayData['schedules'] ?? []);
 
             $approvedPayments = $contract->payments->where('holat', 'tasdiqlangan');
             $realPaid = (float) $approvedPayments->sum('summa');
@@ -712,7 +731,17 @@ class WebController extends Controller
         }
 
         $viewData = array_merge(
-            compact('lot', 'contract', 'stats', 'scheduleDisplayData', 'allSchedulesData', 'currentMonth'),
+            compact(
+                'lot',
+                'contract',
+                'stats',
+                'scheduleDisplayData',
+                'allSchedulesData',
+                'currentMonth',
+                'scheduleDisplayUsesPeriod',
+                'hasSeparateAllMonthsView',
+                'lotCurrentPeriod'
+            ),
             $lotYearPeriods
         );
 

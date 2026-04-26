@@ -43,39 +43,34 @@ class ContractPeriodService
             return;
         }
 
-        // Group schedules by year-month
-        $schedulesByYearMonth = $this->allSchedules->groupBy(function($s) {
-            return Carbon::parse($s->tolov_sanasi)->format('Y-m');
-        })->sortKeys();
-
-        // Get first and last schedule dates
         $firstScheduleDate = Carbon::parse($this->allSchedules->first()->tolov_sanasi);
         $lastScheduleDate = Carbon::parse($this->allSchedules->last()->tolov_sanasi);
+        $lastMonth = $lastScheduleDate->copy()->startOfMonth();
 
-        // Calculate number of 12-month periods
-        $totalMonths = $firstScheduleDate->diffInMonths($lastScheduleDate) + 1;
-        $numPeriods = max(1, ceil($totalMonths / 12));
-
-        // Build periods
+        // 12-oylik davr: to'lov oyi bo'yicha, birinchi oyning 1-kuniga anchor
+        // (birinchi sana 24-iyul bo'lsa ham: 12 oy = o'sha oy tushunchasidan 12 ta kalendar oyi, Iyul–Iyun)
+        $anchor = $firstScheduleDate->copy()->startOfMonth();
         $periodNum = 1;
-        $periodStartDate = $firstScheduleDate->copy();
 
-        while ($periodNum <= $numPeriods && $periodStartDate->lte($lastScheduleDate)) {
-            $periodEndDate = $periodStartDate->copy()->addMonths(12)->subDay();
+        while ($anchor->lte($lastMonth)) {
+            $periodStartDate = $anchor->copy();
+            $periodEndDate = $anchor->copy()->addMonths(12)->subDay();
 
-            // Don't extend beyond last schedule
             if ($periodEndDate->gt($lastScheduleDate)) {
                 $periodEndDate = $lastScheduleDate->copy();
             }
 
-            // Get schedules for this period
             $periodSchedules = $this->allSchedules->filter(function($s) use ($periodStartDate, $periodEndDate) {
                 $scheduleDate = Carbon::parse($s->tolov_sanasi);
+
                 return $scheduleDate->gte($periodStartDate) && $scheduleDate->lte($periodEndDate);
             })->values();
 
-            // Calculate period stats
             $stats = $this->calculatePeriodStats($periodSchedules);
+
+            $todayD = $this->today->copy()->startOfDay();
+            $isCurrent = $todayD->gte($periodStartDate->copy()->startOfDay())
+                && $todayD->lte($periodEndDate->copy()->endOfDay());
 
             $this->periods[] = [
                 'num' => $periodNum,
@@ -83,15 +78,14 @@ class ContractPeriodService
                 'end' => $periodEndDate->copy(),
                 'schedules' => $periodSchedules,
                 'stats' => $stats,
-                'is_current' => $this->today->gte($periodStartDate) && $this->today->lte($periodEndDate),
+                'is_current' => $isCurrent,
             ];
 
-            // Check if this is current period
-            if ($this->today->gte($periodStartDate) && $this->today->lte($periodEndDate)) {
+            if ($isCurrent) {
                 $this->currentPeriodNum = $periodNum;
             }
 
-            $periodStartDate->addMonths(12);
+            $anchor->addMonths(12);
             $periodNum++;
         }
     }
