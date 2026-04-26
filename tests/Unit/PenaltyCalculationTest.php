@@ -17,9 +17,9 @@ use Tests\TestCase;
  *
  * Testlar quyidagi ishlab chiqarish qoidalarini tekshiradi:
  *   1. Stavka: kuniga 0.4% (`PENYA_RATE = 0.004`).
- *   2. Chegara: qarzning 50% (`MAX_PENYA_RATE = 0.5`).
+ *   2. Chegara: fakt tushumning 50% (`MAX_PENYA_RATE = 0.5` × fakt).
  *   3. Penya faqat muddat o'tgan bo'lsa hisoblanadi (`tolovSanasi > oxirgi_muddat`).
- *   4. `penya_summasi` MONOTON: yangi qiymat eskidan past bo'lsa eski saqlanadi.
+ *   4. `penya_summasi` har qayta hisobda joriy formula natijasi bilan almashtiriladi.
  *   5. To'liq to'langan grafiklar uchun penya muzlatiladi (qayta hisoblanmaydi).
  *   6. `PaymentApplicator` faqat principal qarzga yo'naltiradi, penya yechmaydi.
  */
@@ -110,13 +110,76 @@ class PenaltyCalculationTest extends TestCase
     {
         $schedule = $this->createSchedule([
             'oxirgi_muddat' => '2025-01-10',
+            'tolangan_summa' => 1_000_000,
             'qoldiq_summa' => 1_000_000,
         ]);
 
-        // 10 kun kechikish: 1_000_000 * 0.004 * 10 = 40_000
+        // 10 kun: fakt 1_000_000 * 0.004 * 10 = 40_000
         $penya = $schedule->calculatePenyaAtDate(Carbon::parse('2025-01-20'), false);
 
         $this->assertSame(40000.00, round((float) $penya, 2));
+    }
+
+    /** @test */
+    public function no_fakt_means_zero_penalty_even_when_late(): void
+    {
+        $schedule = $this->createSchedule([
+            'oxirgi_muddat' => '2025-01-10',
+            'tolangan_summa' => 0,
+            'qoldiq_summa' => 1_000_000,
+        ]);
+
+        $penya = $schedule->calculatePenyaAtDate(Carbon::parse('2025-01-20'), false);
+
+        $this->assertSame(0.0, (float) $penya);
+    }
+
+    /** @test */
+    public function july_2025_example_uses_fakt_and_delay_days(): void
+    {
+        $schedule = $this->createSchedule([
+            'oy' => 7,
+            'yil' => 2025,
+            'oy_raqami' => 7,
+            'oxirgi_muddat' => '2025-07-24',
+            'tolangan_summa' => 11_451_607,
+            'qoldiq_summa' => 343_120,
+        ]);
+
+        // 4 kun: 11_451_607 * 4 * 0.004 = 183_225,712
+        $penya = $schedule->calculatePenyaAtDate(Carbon::parse('2025-07-28'), false);
+
+        $this->assertSame(183_225.71, round((float) $penya, 2));
+    }
+
+    /** @test */
+    public function july_2025_penya_uses_payment_date_not_bugun(): void
+    {
+        $schedule = $this->createSchedule([
+            'oy' => 7,
+            'yil' => 2025,
+            'oy_raqami' => 7,
+            'oxirgi_muddat' => '2025-07-24',
+            'tolangan_summa' => 11_451_607,
+            'qoldiq_summa' => 343_120,
+        ]);
+        $contract = $schedule->contract;
+
+        Payment::create([
+            'contract_id' => $contract->id,
+            'tolov_raqami' => Payment::generateTolovRaqami(),
+            'tolov_sanasi' => '2025-07-28',
+            'summa' => 11_451_607,
+            'tolov_usuli' => 'bank_otkazmasi',
+            'holat' => 'tasdiqlangan',
+            'tasdiqlangan_sana' => now(),
+        ]);
+
+        $schedule->load('contract.payments');
+        // 2026: hamon 4 kun (28.07 to'lov), bugun emas
+        $penya = $schedule->calculatePenyaAtDate(Carbon::parse('2026-04-15'), false);
+
+        $this->assertSame(183_225.71, round((float) $penya, 2));
     }
 
     /** @test */
@@ -124,6 +187,7 @@ class PenaltyCalculationTest extends TestCase
     {
         $schedule = $this->createSchedule([
             'oxirgi_muddat' => '2025-01-10',
+            'tolangan_summa' => 1_000_000,
             'qoldiq_summa' => 1_000_000,
         ]);
 
@@ -134,24 +198,24 @@ class PenaltyCalculationTest extends TestCase
     }
 
     // =========================================================================
-    // 2. PENYANING SAQLANISHI — MONOTON O'SISH
+    // 2. QAYTA HISOB — "ORQAGA" SANA
     // =========================================================================
 
     /** @test */
-    public function penalty_grows_monotonically_and_never_decreases(): void
+    public function penalty_recalc_as_of_earlier_date_uses_shorter_delay(): void
     {
         $schedule = $this->createSchedule([
             'oxirgi_muddat' => '2025-01-10',
+            'tolangan_summa' => 1_000_000,
             'qoldiq_summa' => 1_000_000,
         ]);
 
-        // Avval 30 kun: 120_000
         $schedule->calculatePenyaAtDate(Carbon::parse('2025-02-09'), true);
         $this->assertSame(120000.00, round((float) $schedule->fresh()->penya_summasi, 2));
 
-        // Keyin "orqaga" — eski sanaga qaytsak ham penya kamaymasligi kerak
+        // Eski sana: 5 kun kechikish → 20_000
         $schedule->calculatePenyaAtDate(Carbon::parse('2025-01-15'), true);
-        $this->assertSame(120000.00, round((float) $schedule->fresh()->penya_summasi, 2));
+        $this->assertSame(20000.00, round((float) $schedule->fresh()->penya_summasi, 2));
     }
 
     /** @test */
@@ -159,14 +223,17 @@ class PenaltyCalculationTest extends TestCase
     {
         $schedule = $this->createSchedule([
             'oxirgi_muddat' => '2025-01-10',
+            'tolov_summasi' => 2_000_000,
+            'tolangan_summa' => 1_000_000,
             'qoldiq_summa' => 1_000_000,
+            'holat' => 'qisman_tolangan',
         ]);
 
         $schedule->calculatePenyaAtDate(Carbon::parse('2025-02-09'), true);
         $frozenPenya = (float) $schedule->fresh()->penya_summasi;
-        $this->assertGreaterThan(0, $frozenPenya);
+        $this->assertSame(120_000.0, round($frozenPenya, 2));
 
-        $schedule->update(['tolangan_summa' => 1_000_000, 'qoldiq_summa' => 0, 'holat' => 'tolangan']);
+        $schedule->update(['tolangan_summa' => 2_000_000, 'qoldiq_summa' => 0, 'holat' => 'tolangan']);
 
         $schedule->calculatePenyaAtDate(Carbon::parse('2026-01-01'), true);
         $this->assertSame($frozenPenya, (float) $schedule->fresh()->penya_summasi);

@@ -13,21 +13,19 @@ use Illuminate\Support\Facades\Storage;
  * PenaltyNotificationService - Generate penalty notifications (Bildirg'inoma)
  *
  * Contract clause 8.2 compliance:
- * - Penalty rate: 0.4% per day on overdue amount
- * - Penalty cap: 50% of overdue amount maximum
- * - Penalty only when payment is late (payment_date > due_date)
+ * - 0,4% × kun: faqat fakt tushum (asos) × kechikish
+ * - Fakt bo‘lmasa penya 0
  */
 class PenaltyNotificationService
 {
-    // Penalty constants (from contract)
-    public const PENALTY_RATE = 0.0004; // 0.04% per day
-    public const MAX_PENALTY_RATE = 0.5; // 50% cap
+    public const PENALTY_RATE = 0.004; // 0,4% / kun
+    public const MAX_PENALTY_RATE = 0.5; // 50% cap (fakt asosida)
     public const LEGAL_BASIS = "Shartnomaning 8.2-bandi asosida";
 
     /**
      * Calculate penalty using contract-compliant formula
      *
-     * @param float $overdueAmount Amount that is overdue
+     * @param float $overdueAmount Fakt tushum (actual payment) — penya asosi
      * @param Carbon $dueDate Due date (oxirgi muddat)
      * @param Carbon $paymentDate Payment date (or calculation date)
      * @return array Calculation details
@@ -49,6 +47,11 @@ class PenaltyNotificationService
             'is_late' => false,
         ];
 
+        if ($overdueAmount <= 0) {
+            $result['formula_text'] = "Fakt tushum yo'q - penya 0 (ushbu qoida)";
+            return $result;
+        }
+
         // Rule 1: Penalty only if payment_date > due_date
         if ($paymentDate->lte($dueDate)) {
             $result['formula_text'] = "To'lov o'z vaqtida amalga oshirilgan - penya yo'q";
@@ -61,7 +64,7 @@ class PenaltyNotificationService
         $overdueDays = $dueDate->diffInDays($paymentDate);
         $result['overdue_days'] = $overdueDays;
 
-        // Rule 2: penalty = overdue_amount * 0.0004 * overdue_days
+        // Rule 2: penalty = fakt * 0.004 * overdue_days
         $calculatedPenalty = $overdueAmount * self::PENALTY_RATE * $overdueDays;
         $result['calculated_penalty'] = round($calculatedPenalty, 2);
 
@@ -157,7 +160,7 @@ TEXT;
         }
 
         $dueDate = Carbon::parse($schedule->oxirgi_muddat);
-        $overdueAmount = (float) $schedule->qoldiq_summa;
+        $overdueAmount = (float) $schedule->tolangan_summa;
 
         // Calculate penalty
         $calculation = $this->calculatePenalty($overdueAmount, $dueDate, $asOfDate);
@@ -460,7 +463,7 @@ HTML;
 
         if ($schedule) {
             $result['system'] = [
-                'overdue_amount' => $schedule->qoldiq_summa,
+                'overdue_amount' => $schedule->tolangan_summa,
                 'penalty' => $schedule->penya_summasi,
                 'overdue_days' => $schedule->kechikish_kunlari,
             ];

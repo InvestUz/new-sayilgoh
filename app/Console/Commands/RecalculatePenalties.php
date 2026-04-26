@@ -3,35 +3,27 @@
 namespace App\Console\Commands;
 
 use App\Models\Contract;
-use App\Models\PaymentSchedule;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Recalculate penalties for all active contracts using the persistence-safe
- * `PaymentSchedule::calculatePenyaAtDate` method.
- *
- * QOIDALAR (Shartnoma 8.2-bandi):
- *   1) Penya faqat muddati o'tgan grafiklar uchun yig'iladi.
- *   2) Formulа: penya = qoldiq * 0.004 * kechikish_kunlari, max = qoldiq * 0.5.
- *   3) `penya_summasi` MONOTON: yangi qiymat eskidan past bo'lsa, eski saqlanadi
- *      — penya hech qachon yo'qolmaydi.
- *   4) To'liq to'langan grafiklar (qoldiq <= 0) qayta hisoblanmaydi —
- *      avval saqlangan "muzlatilgan" qiymat saqlanib qoladi.
+ * Barcha grafiklar (qoldiqli va yopilgan) bo'yicha penya: formula + to'lov sanasi
+ * (`bypassMuzlati` — DBdagi noto'g'ri yuqori penya qolishini oldini oladi).
  */
 class RecalculatePenalties extends Command
 {
     protected $signature = 'penalties:recalculate
-                            {--contract= : Specific contract ID to recalculate}
-                            {--dry-run : Preview changes without saving}';
+                            {--contract= : Shartnoma ID (bitta shartnoma; holat filtri yo\'q)}
+                            {--dry-run : DBga yozmasdan}';
 
-    protected $description = 'Aktiv shartnomalar uchun penyalarni qayta hisoblash (monoton, yo\'qolmas)';
+    protected $description = 'Aktiv shartnomalar uchun penyalarni qayta hisoblash (barcha grafiklar)';
 
     public function handle(): int
     {
         $isDryRun = (bool) $this->option('dry-run');
         $today = Carbon::today();
+        $contractId = $this->option('contract');
 
         $this->info('═══════════════════════════════════════════');
         $this->info('  PENYA QAYTA HISOBLASH');
@@ -42,13 +34,24 @@ class RecalculatePenalties extends Command
         }
         $this->newLine();
 
-        $contractsQuery = Contract::where('holat', 'faol');
-        if ($id = $this->option('contract')) {
-            $contractsQuery->where('id', $id);
-        }
-        $contracts = $contractsQuery->get();
+        $query = Contract::query()
+            ->with(['paymentSchedules', 'payments']);
 
-        $this->info("Topildi: {$contracts->count()} ta shartnoma");
+        if ($contractId) {
+            $query->where('id', (int) $contractId);
+        } else {
+            $query->where('holat', 'faol');
+        }
+
+        $contracts = $query->get();
+
+        if ($contracts->isEmpty()) {
+            $this->error($contractId ? "Shartnoma topilmadi: {$contractId}" : 'Faol shartnoma yo\'q.');
+
+            return self::FAILURE;
+        }
+
+        $this->info('Topildi: ' . $contracts->count() . ' ta shartnoma');
         $this->newLine();
 
         $stats = [
@@ -70,21 +73,18 @@ class RecalculatePenalties extends Command
                 $previous = (float) $schedule->penya_summasi;
                 $stats['previous_total'] += $previous;
 
-                if ((float) $schedule->qoldiq_summa > 0) {
-                    if ($isDryRun) {
-                        $clone = clone $schedule;
-                        $newPenya = $clone->calculatePenyaAtDate($today, false);
-                    } else {
-                        $newPenya = $schedule->calculatePenyaAtDate($today, true);
-                    }
+                $schedule->setRelation('contract', $contract);
 
-                    if (abs($newPenya - $previous) > 0.01) {
-                        $stats['updated']++;
-                    }
-                    $stats['new_total'] += $newPenya;
+                if ($isDryRun) {
+                    $newPenya = (clone $schedule)->calculatePenyaAtDate($today, false, true);
                 } else {
-                    $stats['new_total'] += $previous;
+                    $newPenya = $schedule->calculatePenyaAtDate($today, true, true);
                 }
+
+                if (abs($newPenya - $previous) > 0.01) {
+                    $stats['updated']++;
+                }
+                $stats['new_total'] += $newPenya;
             }
 
             $bar->advance();
@@ -98,14 +98,14 @@ class RecalculatePenalties extends Command
             [
                 ['Shartnomalar', $stats['contracts']],
                 ['Grafiklar', $stats['schedules']],
-                ['Yangilangan grafiklar', $stats['updated']],
-                ['Jami avvalgi penya', number_format($stats['previous_total'], 2) . ' UZS'],
-                ['Jami yangi penya', number_format($stats['new_total'], 2) . ' UZS'],
+                ['O‘zgargan (taxminan) grafiklar', $stats['updated']],
+                ['Jami avvalgi penya (DB)', number_format($stats['previous_total'], 2) . ' UZS'],
+                ['Jami hisoblangan yangi', number_format($stats['new_total'], 2) . ' UZS'],
                 ['Farq', number_format($stats['new_total'] - $stats['previous_total'], 2) . ' UZS'],
             ]
         );
 
-        Log::info('Penalty recalculation completed', $stats + ['dry_run' => $isDryRun]);
+        Log::info('Penalty recalculation completed', $stats + ['dry_run' => $isDryRun, 'contract_id' => $contractId]);
 
         return self::SUCCESS;
     }

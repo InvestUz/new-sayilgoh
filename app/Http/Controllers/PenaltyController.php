@@ -255,7 +255,7 @@ class PenaltyController extends Controller
 
         // Calculate current penalty
         $calculation = $this->notificationService->calculatePenalty(
-            (float) $schedule->qoldiq_summa,
+            (float) $schedule->tolangan_summa,
             $effectiveDeadline,
             $today
         );
@@ -271,8 +271,8 @@ class PenaltyController extends Controller
                 'due_date_formatted' => $effectiveDeadline->format('d.m.Y'),
                 'original_due_date' => Carbon::parse($schedule->oxirgi_muddat)->format('d.m.Y'),
                 'has_custom_deadline' => !empty($schedule->custom_oxirgi_muddat),
-                'overdue_amount' => $schedule->qoldiq_summa,
-                'overdue_amount_formatted' => number_format($schedule->qoldiq_summa, 0, ',', ' ') . ' UZS',
+                'overdue_amount' => $schedule->tolangan_summa,
+                'overdue_amount_formatted' => number_format((float) $schedule->tolangan_summa, 0, ',', ' ') . ' UZS',
                 'system_penalty' => $schedule->penya_summasi,
                 'system_overdue_days' => $schedule->kechikish_kunlari,
             ],

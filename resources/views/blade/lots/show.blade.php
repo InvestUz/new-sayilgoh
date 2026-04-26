@@ -20,7 +20,6 @@ $images = $lot->rasmlar ?? [];
 $mainIndex = $lot->main_image_index ?? 0;
 $mainImage = $images[$mainIndex] ?? ($images[0] ?? null);
 @endphp
-
 @php
 function formatLotSum($num) {
     if ($num >= 1000000000) return number_format($num / 1000000000, 2, ',', ' ') . ' <span class="text-sm font-normal text-gray-400">mlrd</span>';

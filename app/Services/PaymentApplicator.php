@@ -81,9 +81,6 @@ class PaymentApplicator
                 break;
             }
 
-            // Informatsion penyani yangilab qo'yamiz (undan pul yechmaymiz)
-            $schedule->calculatePenyaAtDate($tolovSanasi, false);
-
             $oldQoldiq = (float) $schedule->qoldiq_summa;
             $asosiyTolov = min($oldQoldiq, $qoldiqSumma);
 
@@ -93,6 +90,10 @@ class PaymentApplicator
             $qoldiqSumma -= $asosiyTolov;
 
             $schedule->updateStatus();
+            $schedule->save();
+
+            // Penya faqat fakt tushgandan keyin (tolangan) hisoblanadi
+            $schedule->calculatePenyaAtDate($tolovSanasi, false);
             $schedule->save();
 
             $qoplanganOylar[] = [

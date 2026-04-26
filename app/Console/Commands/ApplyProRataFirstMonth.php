@@ -175,11 +175,13 @@ class ApplyProRataFirstMonth extends Command
                     }
 
                     $days = (int) $deadline->diffInDays($payDate);
-                    $base = (float) $schedule->tolov_summasi;
-                    $newPenya = min(
-                        $base * PaymentSchedule::PENYA_RATE * $days,
-                        $base * PaymentSchedule::MAX_PENYA_RATE
-                    );
+                    $fakt = (float) $schedule->tolangan_summa;
+                    $newPenya = $fakt <= 0
+                        ? 0.0
+                        : min(
+                            $fakt * PaymentSchedule::PENYA_RATE * $days,
+                            $fakt * PaymentSchedule::MAX_PENYA_RATE
+                        );
 
                     $schedule->penya_summasi = round($newPenya, 2);
                     $schedule->kechikish_kunlari = $days;

@@ -103,10 +103,8 @@ class WebController extends Controller
         }
         $totalPaid = max(0, (float) $paidQuery->sum('summa') - (float) abs($refundQuery->sum('summa')));
 
-        // "Jami Penya" — har bir qoldiqli grafik uchun bugungi sanaga
-        // penya_summasi'ni MONOTON ravishda yangilaymiz va DBga saqlaymiz.
-        // To'liq to'langan grafiklarda esa avval saqlangan (muzlatilgan)
-        // qiymat o'qiladi — penya hech qachon yo'qolmaydi.
+        // "Jami Penya" — qoldiqli grafiklar uchun bugun bo'yicha penya
+        // (formula) DBga yoziladi. To'liq to'langan: muzlatish calculatePenyaAtDate ichida.
         $totalPenya = 0.0;
         foreach ($filteredSchedules as $s) {
             if ((float) $s->qoldiq_summa > 0) {
@@ -571,8 +569,9 @@ class WebController extends Controller
                             $qarz += $schedule->qoldiq_summa;
                             $days = $oxirgiMuddat->diffInDays($bugun);
                             $kechikishKunlari = max($kechikishKunlari, $days);
-                            $penyaCalc = $schedule->qoldiq_summa * 0.004 * $days;
-                            $maxPenya = $schedule->qoldiq_summa * 0.5;
+                            $fakt = (float) $schedule->tolangan_summa;
+                            $penyaCalc = $fakt > 0 ? $fakt * 0.004 * $days : 0.0;
+                            $maxPenya = $fakt > 0 ? $fakt * 0.5 : 0.0;
                             $penya += min($penyaCalc, $maxPenya);
                         } else {
                             // Not yet due
@@ -645,7 +644,7 @@ class WebController extends Controller
         // ko'rsatish uchun ham
         $contract = $lot->contracts->sortByDesc('id')->first();
 
-        // Penyani bugungi sanaga MONOTON ravishda saqlab qo'yish
+        // Qoldiqli grafiklar: bugun bo'yicha penya
         if ($contract) {
             foreach ($contract->paymentSchedules as $schedule) {
                 if ((float) $schedule->qoldiq_summa > 0) {

@@ -11,10 +11,10 @@ use Carbon\Carbon;
 /**
  * To'lov Grafigi (Payment Schedule) modeli
  *
- * Penalty calculation follows contract rules (Section 8.2):
- * - Rate: 0.4% per day on overdue amount
- * - Cap: 50% maximum of overdue amount
- * - Only applies when payment_date > due_date
+ * Penalty calculation (Section 8.2):
+ * - penya = fakt (tolangan_summa) × kechikish_kunlari × 0.004 (grafik/qoldiq emas)
+ * - Fakt bo‘lmasa → ushbu formula bo‘yicha 0
+ * - Chegara: faktning 50%
  */
 class PaymentSchedule extends Model
 {
@@ -129,12 +129,29 @@ class PaymentSchedule extends Model
      */
     public function getMuddatiOtganAttribute(): bool
     {
-        // Use custom deadline if set, otherwise use original deadline
-        $effectiveDeadline = $this->custom_oxirgi_muddat
-            ? Carbon::parse($this->custom_oxirgi_muddat)
-            : Carbon::parse($this->oxirgi_muddat);
+        $effectiveDeadline = $this->resolveEffectiveDeadline();
 
         return $effectiveDeadline->isPast() && $this->holat !== 'tolangan';
+    }
+
+    /**
+     * Effective deadline used by penalty/overdue logic.
+     *
+     * Rule: for first schedule row (oy_raqami=1), if custom deadline is not set,
+     * use contract start date to match table/display logic.
+     */
+    protected function resolveEffectiveDeadline(): Carbon
+    {
+        if (!empty($this->custom_oxirgi_muddat)) {
+            return Carbon::parse($this->custom_oxirgi_muddat);
+        }
+
+        $isFirstRow = (int) ($this->oy_raqami ?? 0) === 1;
+        if ($isFirstRow && $this->contract && !empty($this->contract->boshlanish_sanasi)) {
+            return Carbon::parse($this->contract->boshlanish_sanasi);
+        }
+
+        return Carbon::parse($this->oxirgi_muddat);
     }
 
     /**
@@ -152,75 +169,76 @@ class PaymentSchedule extends Model
     /**
      * Calculate penalty as of current date.
      *
-     * Contract qoidalari:
-     * - Stavka: kuniga 0.4%
-     * - Chegara: qarzning 50%
-     * - Faqat muddat o'tgan bo'lsa qo'llaniladi
+     * Fakt tushum × stavka × (mavjud) kechikish; chegara: faktning 50%.
      *
      * @param bool $save DB ga saqlansinmi
      * @return float Joriy `penya_summasi`
      */
     public function calculatePenya(bool $save = true): float
     {
-        return $this->calculatePenyaAtDate(Carbon::today(), $save);
+        return $this->calculatePenyaAtDate(Carbon::today(), $save, false);
     }
 
     /**
      * Calculate penalty at a specific date
      * This is the PRIMARY penalty calculation method.
      *
-     * PERSISTENCE QOIDASI (penya yo'qolmasligi shart):
-     * ──────────────────────────────────────────────────────────────────────
-     *  - `penya_summasi` MONOTON ravishda o'sadi: yangi hisoblangan qiymat
-     *    avvalgi `penya_summasi`'dan KICHIK bo'lsa, eski (yuqoriroq) qiymat
-     *    saqlab qolinadi. Bu — qisman to'lovdan keyin yoki shartnoma
-     *    to'liq yopilgandan keyin tarixda jamlangan penya o'chmasligi
-     *    uchun kafolat.
-     *  - Grafik to'liq to'langan bo'lsa (qoldiq_summa <= 0), `penya_summasi`
-     *    "muzlatilgan" deb hisoblanadi va hech qachon avtomatik tarzda
-     *    qayta nolga tushirilmaydi. Faqat `/api/penalty-payments` orqali
-     *    ko'paytirilgan `tolangan_penya` uni qoplashi mumkin.
+     * PERSISTENCE: to'g'ri formula = `penya_summasi` (odatdagi yuk, sahifa).
+     * To'liq to'langan qator: `bypassMuzlati` bo'lmasa, mavjud penya
+     * qayta hisoblanmaydi (muzlatish). `penalties:recalculate` bypass bilan tuzatadi.
      *
-     * Hisob qoidalari (Shartnoma 8.2-bandi):
-     * 1. tolovSanasi <= oxirgi_muddat  → yangi penya hisoblanmaydi
-     * 2. penya = qoldiq_summa * 0.004 * kechikish_kunlari
-     * 3. penya <= qoldiq_summa * 0.5 (chegara 50%)
+     * Hisob qoidalari (8.2):
+     * 1. tolovSanasi <= oxirgi_muddat  → yangi penya hisoblanmaydi (sana logikasi o‘zgarmaydi)
+     * 2. tolangan_summa <= 0 → yangi penya = 0 (fakt yo‘q)
+     * 3. Fakt bo‘lsa: kechikish odatda shu oydagi oxirgi to‘lov sanasigacha
+     *    (jadvaldagi 4 kungacha), "bugun"gacha o‘smasin.
+     * 4. Aks holda: penya = fakt * 0.004 * kechikish, max = fakt * 0.5
      *
-     * @param Carbon $tolovSanasi To'lov yoki hisob sanasi
-     * @param bool   $save        DB ga saqlansinmi
+     * @param Carbon $tolovSanasi   To'lov yoki hisob sanasi
+     * @param bool   $save          DB ga saqlansinmi
+     * @param bool   $bypassMuzlati `true`: "to'liq to'langan, eski penya" muzlatishini
+     *                          o'tkazib yuborib, formuladan qayta yozish (`penalties:recalculate` uchun)
      * @return float Joriy `penya_summasi` qiymati
      */
-    public function calculatePenyaAtDate(Carbon $tolovSanasi, bool $save = true): float
+    public function calculatePenyaAtDate(Carbon $tolovSanasi, bool $save = true, bool $bypassMuzlati = false): float
     {
         $existingPenya = (float) $this->penya_summasi;
 
-        // To'liq to'langan grafiklar — penya muzlatilgan, qayta hisoblamaymiz
-        if ((float) $this->qoldiq_summa <= 0) {
+        // To'liq to'langanda: odatda penya o'zmaydi; lekin noto'g'ri saqlangan qiymatni
+        // `penalties:recalculate` bilan tuzatish uchun bypass.
+        if (! $bypassMuzlati && (float) $this->qoldiq_summa <= 0 && $existingPenya > 0) {
             return $existingPenya;
         }
 
-        // Tugagan shartnoma — yangi penya yig'ilmaydi, mavjud qiymat saqlanadi
         $contract = $this->contract;
-        if ($contract && $contract->is_expired) {
+        if (! $bypassMuzlati && $contract && $contract->is_expired) {
             return $existingPenya;
         }
 
-        $oxirgiMuddat = $this->custom_oxirgi_muddat
-            ? Carbon::parse($this->custom_oxirgi_muddat)
-            : Carbon::parse($this->oxirgi_muddat);
+        $oxirgiMuddat = $this->resolveEffectiveDeadline();
 
         // Hali muddat o'tmagan — tarixiy penya bor bo'lsa saqlaymiz
         if ($tolovSanasi->lte($oxirgiMuddat)) {
             return $existingPenya;
         }
 
-        $kechikishKunlari = (int) $oxirgiMuddat->diffInDays($tolovSanasi);
-        $overdueAmount = (float) $this->qoldiq_summa;
-        $maxPenya = $overdueAmount * self::MAX_PENYA_RATE;
-        $newPenya = min($overdueAmount * self::PENYA_RATE * $kechikishKunlari, $maxPenya);
+        $fakt = (float) $this->tolangan_summa;
+        $penyaTugashKuni = $this->penyaAccrualEndDate($tolovSanasi, $oxirgiMuddat);
 
-        // MONOTON: yangi qiymat eskidan past bo'lmasligi kerak
-        $finalPenya = round(max($existingPenya, $newPenya), 2);
+        if ($fakt > 0 && $penyaTugashKuni->lte($oxirgiMuddat)) {
+            $kechikishKunlari = 0;
+            $newPenya = 0.0;
+        } else {
+            $kechikishKunlari = (int) $oxirgiMuddat->diffInDays($penyaTugashKuni);
+            if ($fakt <= 0) {
+                $newPenya = 0.0;
+            } else {
+                $maxPenya = $fakt * self::MAX_PENYA_RATE;
+                $newPenya = min($fakt * self::PENYA_RATE * $kechikishKunlari, $maxPenya);
+            }
+        }
+
+        $finalPenya = round($newPenya, 2);
 
         $this->kechikish_kunlari = max((int) $this->kechikish_kunlari, $kechikishKunlari);
         $this->penya_summasi = $finalPenya;
@@ -230,6 +248,43 @@ class PaymentSchedule extends Model
         }
 
         return (float) $this->penya_summasi;
+    }
+
+    /**
+     * Fakt tushganda: penya muddati oxirgi muddatdan shu kalendar oydagi
+     * eng oxirgi to'lov sanasigacha; "as_of" sanaga o'smaydi.
+     * Fakt yo'q: hisob sanasi (odatda bugun) bo'yicha.
+     */
+    protected function penyaAccrualEndDate(Carbon $tolovSanasi, Carbon $oxirgiMuddat): Carbon
+    {
+        $asOf = $tolovSanasi->copy()->startOfDay();
+        $dead = $oxirgiMuddat->copy()->startOfDay();
+        if ((float) $this->tolangan_summa <= 0) {
+            return $asOf;
+        }
+        $c = $this->contract;
+        if (! $c) {
+            return $asOf;
+        }
+        $c->loadMissing('payments');
+        $last = $c->payments
+            ->where('holat', 'tasdiqlangan')
+            ->filter(function ($p) {
+                $d = Carbon::parse($p->tolov_sanasi);
+
+                return (int) $d->month === (int) $this->oy && (int) $d->year === (int) $this->yil;
+            })
+            ->sortByDesc('tolov_sanasi')
+            ->first();
+        if (! $last) {
+            return $asOf;
+        }
+        $payD = Carbon::parse($last->tolov_sanasi)->startOfDay();
+        if ($payD->lte($dead)) {
+            return $dead;
+        }
+
+        return $payD->min($asOf);
     }
 
     /**
@@ -244,10 +299,7 @@ class PaymentSchedule extends Model
     {
         $asOfDate = $asOfDate ?? Carbon::today();
 
-        // Use custom deadline if set, otherwise use original deadline
-        $oxirgiMuddat = $this->custom_oxirgi_muddat
-            ? Carbon::parse($this->custom_oxirgi_muddat)
-            : Carbon::parse($this->oxirgi_muddat);
+        $oxirgiMuddat = $this->resolveEffectiveDeadline();
 
         // Calculate overdue days
         $overdueDays = 0;
@@ -255,19 +307,23 @@ class PaymentSchedule extends Model
             $overdueDays = $oxirgiMuddat->diffInDays($asOfDate);
         }
 
-        // Calculate penalty using the formula
-        $overdueAmount = (float) $this->qoldiq_summa;
-        $calculatedPenalty = $overdueAmount * self::PENYA_RATE * $overdueDays;
-        $maxPenalty = $overdueAmount * self::MAX_PENYA_RATE;
-        $penaltyCapApplied = $calculatedPenalty > $maxPenalty;
-        $calculatedPenalty = min($calculatedPenalty, $maxPenalty);
+        $fakt = (float) $this->tolangan_summa;
+        $calculatedPenalty = 0.0;
+        $maxPenalty = 0.0;
+        $penaltyCapApplied = false;
+        if ($fakt > 0 && $overdueDays > 0) {
+            $raw = $fakt * self::PENYA_RATE * $overdueDays;
+            $maxPenalty = $fakt * self::MAX_PENYA_RATE;
+            $penaltyCapApplied = $raw > $maxPenalty;
+            $calculatedPenalty = min($raw, $maxPenalty);
+        }
 
         return [
             'overdue_days' => $overdueDays,              // integer, 0 allowed
             'penalty_rate' => self::PENYA_FOIZI,        // always 0.4%
             'calculated_penalty' => round($calculatedPenalty, 2), // numeric, 0 allowed
             'penalty_cap_applied' => $penaltyCapApplied,
-            'overdue_amount' => $overdueAmount,
+            'overdue_amount' => $fakt,                  // penya asosi: fakt tushum
             'max_penalty' => round($maxPenalty, 2),
         ];
     }
