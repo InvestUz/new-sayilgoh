@@ -717,7 +717,7 @@ class WebController extends Controller
      * @return array{
      *   year:int, month:int, label:string,
      *   has_schedule:bool, schedule_id:?int,
-     *   plan:float, paid:float, debt:float, penalty:float,
+     *   plan:float, paid:float, fakt_tushgan:float, debt:float, penalty:float,
      *   tolov_sanasi:?string, oxirgi_muddat:?string, effective_deadline:?string,
      *   is_overdue:bool, overdue_days:int, days_left:int, status:?string,
      *   sahifa_xulosa:string
@@ -740,6 +740,7 @@ class WebController extends Controller
                 'schedule_id' => null,
                 'plan' => 0.0,
                 'paid' => 0.0,
+                'fakt_tushgan' => 0.0,
                 'debt' => 0.0,
                 'penalty' => 0.0,
                 'tolov_sanasi' => null,
@@ -755,11 +756,26 @@ class WebController extends Controller
 
         $effDeadline = $schedule->custom_oxirgi_muddat ?? $schedule->oxirgi_muddat;
         $deadlineCarbon = Carbon::parse($effDeadline);
-        $isOverdue = (float) $schedule->qoldiq_summa > 0 && $deadlineCarbon->lt($today);
-        $overdueDays = $isOverdue ? (int) $deadlineCarbon->diffInDays($today) : 0;
-        $daysLeft = $deadlineCarbon->isFuture() ? (int) $today->diffInDays($deadlineCarbon, false) : 0;
+        if (empty($schedule->custom_oxirgi_muddat) && (int) $schedule->oy_raqami === 1) {
+            $deadlineCarbon = Carbon::parse($contract->boshlanish_sanasi)->startOfDay();
+        }
+        $todayStart = $today->copy()->startOfDay();
+        $isOverdue = (float) $schedule->qoldiq_summa > 0 && $deadlineCarbon->lt($todayStart);
+        $overdueDays = $isOverdue ? (int) $deadlineCarbon->diffInDays($todayStart) : 0;
+        $daysLeft = $deadlineCarbon->isFuture() ? (int) $todayStart->diffInDays($deadlineCarbon->copy()->startOfDay()) : 0;
 
         $penalty = max(0.0, (float) $schedule->penya_summasi - (float) $schedule->tolangan_penya);
+
+        $faktTushgan = (float) $contract->payments
+            ->filter(function ($p) use ($schedule) {
+                if ($p->holat !== 'tasdiqlangan') {
+                    return false;
+                }
+                $d = Carbon::parse($p->tolov_sanasi);
+
+                return (int) $d->month === (int) $schedule->oy && (int) $d->year === (int) $schedule->yil;
+            })
+            ->sum('summa');
 
         $debt = (float) $schedule->qoldiq_summa;
 
@@ -788,6 +804,7 @@ class WebController extends Controller
             'schedule_id' => $schedule->id,
             'plan' => (float) $schedule->tolov_summasi,
             'paid' => (float) $schedule->tolangan_summa,
+            'fakt_tushgan' => $faktTushgan,
             'debt' => $debt,
             'penalty' => $penalty,
             'tolov_sanasi' => optional($schedule->tolov_sanasi)->format('Y-m-d'),

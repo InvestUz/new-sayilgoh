@@ -79,17 +79,17 @@ function formatLotSum($num) {
                 <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
             </div>
             <p class="text-xs text-slate-400 uppercase tracking-wide font-medium">QOLDIQ</p>
-            <p class="text-4xl font-bold {{ $stats['qoldiq'] > 0 ? 'text-red-400' : 'text-white' }} mt-3">{!! formatLotSum($stats['qoldiq']) !!}</p>
-            <p class="text-xs text-slate-500 mt-4">To'lanmagan summa</p>
+            <p class="text-4xl font-bold {{ $stats['qoldiq'] > 0 ? 'text-red-400' : 'text-slate-200' }} mt-3">{!! formatLotSum($stats['qoldiq']) !!}</p>
+            <p class="text-xs text-slate-500 mt-4">Reja sanasi o‘tgan oylarning grafik qatorlaridagi qolgan asosiy yig‘indisi (barcha kelajak oylari kirmaydi)</p>
         </div>
 
         <!-- Penya -->
-        <div class="bg-slate-800/50 backdrop-blur rounded-xl border border-slate-700/50 border-l-4 border-l-amber-500 p-5 relative overflow-hidden">
-            <div class="absolute top-4 right-4 w-10 h-10 bg-amber-500/10 rounded-lg flex items-center justify-center">
-                <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <div class="bg-slate-800/50 backdrop-blur rounded-xl border border-slate-700/50 border-l-4 border-l-red-500 p-5 relative overflow-hidden">
+            <div class="absolute top-4 right-4 w-10 h-10 bg-red-500/10 rounded-lg flex items-center justify-center">
+                <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
             </div>
             <p class="text-xs text-slate-400 uppercase tracking-wide font-medium">PENYA (HISOBLANGAN)</p>
-            <p class="text-4xl font-bold {{ $stats['penya'] > 0 ? 'text-amber-400' : 'text-white' }} mt-3">{!! formatLotSum($stats['penya']) !!}</p>
+            <p class="text-4xl font-bold {{ $stats['penya'] > 0 ? 'text-red-400' : 'text-slate-200' }} mt-3">{!! formatLotSum($stats['penya']) !!}</p>
             <p class="text-xs text-slate-500 mt-4">Kechikish jarimasi<br><span class="text-slate-600">(informatsion, alohida to'lanadi)</span></p>
         </div>
     </div>
@@ -102,7 +102,7 @@ function formatLotSum($num) {
             <span class="font-bold text-white">{{ $paidPercent }}%</span>
         </div>
         <div class="h-3 bg-slate-700 rounded-full">
-            <div class="h-3 bg-gradient-to-r from-blue-500 to-blue-400 rounded-full transition-all" style="width: {{ $paidPercent }}%"></div>
+            <div class="h-3 bg-gradient-to-r from-green-600 to-green-500 rounded-full transition-all" style="width: {{ $paidPercent }}%"></div>
         </div>
     </div>
 
@@ -110,8 +110,8 @@ function formatLotSum($num) {
     @isset($currentMonth)
     @php
         $cm = $currentMonth;
-        $cmDebtClass = $cm['debt'] > 0 ? ($cm['is_overdue'] ? 'text-red-400' : 'text-amber-300') : 'text-emerald-400';
-        $cmBorderClass = $cm['debt'] > 0 ? ($cm['is_overdue'] ? 'border-l-red-500' : 'border-l-amber-500') : 'border-l-emerald-500';
+        $cmDebtClass = $cm['debt'] > 0 ? 'text-red-400' : 'text-slate-200';
+        $cmBorderClass = $cm['debt'] > 0 ? 'border-l-red-500' : 'border-l-slate-600';
         $cmStatusLabel = !$cm['has_schedule']
             ? 'Grafik yo\'q'
             : ($cm['debt'] <= 0
@@ -126,8 +126,8 @@ function formatLotSum($num) {
                 <p class="text-sm text-slate-400 mt-1">{{ $cm['sahifa_xulosa'] }}</p>
             </div>
             <span class="self-start md:self-center inline-flex items-center px-3 py-1 text-xs font-medium rounded
-                {{ $cm['debt'] <= 0 ? 'bg-emerald-500/15 text-emerald-300'
-                   : ($cm['is_overdue'] ? 'bg-red-500/15 text-red-300' : 'bg-amber-500/15 text-amber-300') }}">
+                {{ $cm['debt'] <= 0 ? 'bg-slate-600/30 text-slate-200'
+                   : ($cm['is_overdue'] ? 'bg-red-500/15 text-red-300' : 'bg-slate-600/30 text-slate-200') }}">
                 {{ $cmStatusLabel }}
             </span>
         </div>
@@ -139,8 +139,9 @@ function formatLotSum($num) {
                 <p class="text-lg font-semibold text-white mt-1">{!! formatLotSum($cm['plan']) !!}</p>
             </div>
             <div>
-                <p class="text-[11px] uppercase text-slate-500">To'langan</p>
-                <p class="text-lg font-semibold text-emerald-400 mt-1">{!! formatLotSum($cm['paid']) !!}</p>
+                <p class="text-[11px] uppercase text-slate-500">Fakt tushim (shu oy, kassa)</p>
+                <p class="text-lg font-semibold text-green-500 mt-1">{!! formatLotSum($cm['fakt_tushgan'] ?? 0) !!}</p>
+                <p class="text-[10px] text-slate-500 mt-1" title="Shu oy grafigi qatoriga FIFO bo'yicha yozilgan asosiy to'lov">Grafik qator (FIFO): {!! formatLotSum($cm['paid']) !!}</p>
             </div>
             <div>
                 <p class="text-[11px] uppercase text-slate-500">Qarz (shu oy)</p>
@@ -148,7 +149,7 @@ function formatLotSum($num) {
             </div>
             <div>
                 <p class="text-[11px] uppercase text-slate-500">Penya (qoldiq)</p>
-                <p class="text-lg font-semibold {{ $cm['penalty'] > 0 ? 'text-amber-300' : 'text-white' }} mt-1">
+                <p class="text-lg font-semibold {{ $cm['penalty'] > 0 ? 'text-red-400' : 'text-slate-200' }} mt-1">
                     {!! formatLotSum($cm['penalty']) !!}
                 </p>
             </div>
@@ -164,11 +165,11 @@ function formatLotSum($num) {
             </div>
             <div>
                 @if($cm['debt'] <= 0)
-                    <span class="text-emerald-400">Yopilgan</span>
+                    <span class="text-slate-200">Yopilgan</span>
                 @elseif($cm['is_overdue'])
                     <span class="text-red-400">{{ $cm['overdue_days'] }} kun kechikish</span>
                 @else
-                    <span class="text-amber-300">{{ $cm['days_left'] }} kun qoldi</span>
+                    <span class="text-slate-200">{{ $cm['days_left'] }} kun qoldi</span>
                 @endif
             </div>
         </div>
@@ -250,7 +251,7 @@ function formatLotSum($num) {
                 </div>
                 <!-- Penya kalkulyatori button -->
                 <div class="px-5 py-3 border-t border-slate-700/50">
-                    <a href="{{ route('registry.contracts.penalty-calculator', $contract) }}" class="flex items-center justify-center gap-2 w-full py-2 bg-amber-600 hover:bg-amber-500 text-white text-sm font-medium rounded-lg transition">
+                    <a href="{{ route('registry.contracts.penalty-calculator', $contract) }}" class="flex items-center justify-center gap-2 w-full py-2 bg-red-700 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
                         Penya kalkulyatori
                     </a>
@@ -464,17 +465,17 @@ function formatLotSum($num) {
                         <th rowspan="2" class="border border-slate-600 px-2 py-1 text-left">Shartnoma davri</th>
                         <th rowspan="2" class="border border-slate-600 px-2 py-1 text-center">Oylar</th>
                         <th colspan="2" class="border border-slate-600 px-2 py-1 text-center">Reja</th>
-                        <th colspan="2" class="border border-slate-600 px-2 py-1 text-center text-blue-400">Fakt</th>
+                        <th colspan="2" class="border border-slate-600 px-2 py-1 text-center text-green-500">Fakt</th>
                         <th colspan="2" class="border border-slate-600 px-2 py-1 text-center text-red-400">Qoldiq</th>
                         <th rowspan="2" class="border border-slate-600 px-2 py-1 text-center">%</th>
-                        <th rowspan="2" class="border border-slate-600 px-2 py-1 text-center text-amber-400">Penya</th>
+                        <th rowspan="2" class="border border-slate-600 px-2 py-1 text-center text-red-400">Penya</th>
                         <th rowspan="2" class="border border-slate-600 px-2 py-1 text-center">Amal</th>
                     </tr>
                     <tr class="text-[10px] text-slate-400">
                         <th class="border border-slate-600 px-2 py-1 text-right">summa</th>
                         <th class="border border-slate-600 px-2 py-1 text-right">oylik</th>
-                        <th class="border border-slate-600 px-2 py-1 text-right text-blue-400">tushgan</th>
-                        <th class="border border-slate-600 px-2 py-1 text-right text-blue-400">oylik</th>
+                        <th class="border border-slate-600 px-2 py-1 text-right text-green-500">tushgan</th>
+                        <th class="border border-slate-600 px-2 py-1 text-right text-green-500">oylik</th>
                         <th class="border border-slate-600 px-2 py-1 text-right text-red-400">jami</th>
                         <th class="border border-slate-600 px-2 py-1 text-right text-red-400">o'tgan</th>
                     </tr>
@@ -484,10 +485,10 @@ function formatLotSum($num) {
                         $periodScheduleIds = $currentPeriod['schedules']->pluck('id')->toArray();
                         $canDeletePeriod = $currentPeriod['paid'] <= 0;
                     @endphp
-                    <tr class="hover:bg-slate-700/30 bg-blue-900/20">
-                        <td class="border border-slate-600 px-2 py-1 text-center text-blue-400 font-bold">{{ $currentPeriod['num'] }}</td>
+                    <tr class="hover:bg-slate-700/30">
+                        <td class="border border-slate-600 px-2 py-1 text-center text-slate-200 font-bold">{{ $currentPeriod['num'] }}</td>
                         <td class="border border-slate-600 px-2 py-1">
-                            <span class="px-1 bg-blue-600 text-white text-[9px] rounded mr-1">JORIY</span>
+                            <span class="px-1 bg-slate-600 text-slate-100 text-[9px] rounded mr-1">JORIY</span>
                             <span class="text-white">{{ $currentPeriod['start']->format('d.m.Y') }}</span>
                             <span class="text-slate-500">—</span>
                             <span class="text-white">{{ $currentPeriod['end']->format('d.m.Y') }}</span>
@@ -495,12 +496,12 @@ function formatLotSum($num) {
                         <td class="border border-slate-600 px-2 py-1 text-center">{{ $currentPeriod['months'] }}</td>
                         <td class="border border-slate-600 px-2 py-1 text-right text-white">{{ number_format($currentPeriod['total'], 0, ',', ' ') }}</td>
                         <td class="border border-slate-600 px-2 py-1 text-right text-slate-400">{{ $currentPeriod['months'] > 0 ? number_format($currentPeriod['total'] / $currentPeriod['months'], 0, ',', ' ') : 0 }}</td>
-                        <td class="border border-slate-600 px-2 py-1 text-right {{ $currentPeriod['paid'] > 0 ? 'text-blue-400' : 'text-slate-500' }}">{{ number_format($currentPeriod['paid'], 0, ',', ' ') }}</td>
+                        <td class="border border-slate-600 px-2 py-1 text-right {{ $currentPeriod['paid'] > 0 ? 'text-green-500' : 'text-slate-500' }}">{{ number_format($currentPeriod['paid'], 0, ',', ' ') }}</td>
                         <td class="border border-slate-600 px-2 py-1 text-right text-slate-400">{{ $currentPeriod['schedules']->where('tolangan_summa', '>', 0)->count() > 0 ? number_format($currentPeriod['paid'] / $currentPeriod['schedules']->where('tolangan_summa', '>', 0)->count(), 0, ',', ' ') : '—' }}</td>
-                        <td class="border border-slate-600 px-2 py-1 text-right {{ $currentPeriod['debt'] > 0 ? 'text-red-400' : 'text-green-400' }}">{{ number_format($currentPeriod['debt'], 0, ',', ' ') }}</td>
+                        <td class="border border-slate-600 px-2 py-1 text-right {{ $currentPeriod['debt'] > 0 ? 'text-red-400' : 'text-slate-200' }}">{{ number_format($currentPeriod['debt'], 0, ',', ' ') }}</td>
                         <td class="border border-slate-600 px-2 py-1 text-right {{ $currentPeriod['overdue'] > 0 ? 'text-red-400' : 'text-slate-500' }}">{{ $currentPeriod['overdue'] > 0 ? number_format($currentPeriod['overdue'], 0, ',', ' ') : '—' }}</td>
-                        <td class="border border-slate-600 px-2 py-1 text-center {{ $currentPeriod['percent'] >= 100 ? 'text-green-400' : ($currentPeriod['percent'] >= 50 ? 'text-blue-400' : 'text-red-400') }}">{{ $currentPeriod['percent'] }}%</td>
-                        <td class="border border-slate-600 px-2 py-1 text-right {{ $currentPeriod['penya'] > 0 ? 'text-amber-400' : 'text-slate-500' }}">{{ $currentPeriod['penya'] > 0 ? number_format($currentPeriod['penya'], 0, ',', ' ') : '—' }}</td>
+                        <td class="border border-slate-600 px-2 py-1 text-center {{ $currentPeriod['percent'] >= 100 ? 'text-green-500' : 'text-slate-200' }}">{{ $currentPeriod['percent'] }}%</td>
+                        <td class="border border-slate-600 px-2 py-1 text-right {{ $currentPeriod['penya'] > 0 ? 'text-red-400' : 'text-slate-500' }}">{{ $currentPeriod['penya'] > 0 ? number_format($currentPeriod['penya'], 0, ',', ' ') : '—' }}</td>
                         <td class="border border-slate-600 px-2 py-1 text-center">
                             @if($canDeletePeriod)
                             <button @click="deletePeriodSchedules([{{ implode(',', $periodScheduleIds) }}])" class="text-slate-500 hover:text-red-400">
@@ -532,17 +533,17 @@ function formatLotSum($num) {
                                 <th rowspan="2" class="border border-slate-600 px-2 py-1 text-left">Shartnoma davri</th>
                                 <th rowspan="2" class="border border-slate-600 px-2 py-1 text-center">Oylar</th>
                                 <th colspan="2" class="border border-slate-600 px-2 py-1 text-center">Reja</th>
-                                <th colspan="2" class="border border-slate-600 px-2 py-1 text-center text-blue-400">Fakt</th>
+                                <th colspan="2" class="border border-slate-600 px-2 py-1 text-center text-green-500">Fakt</th>
                                 <th colspan="2" class="border border-slate-600 px-2 py-1 text-center text-red-400">Qoldiq</th>
                                 <th rowspan="2" class="border border-slate-600 px-2 py-1 text-center">%</th>
-                                <th rowspan="2" class="border border-slate-600 px-2 py-1 text-center text-amber-400">Penya</th>
+                                <th rowspan="2" class="border border-slate-600 px-2 py-1 text-center text-red-400">Penya</th>
                                 <th rowspan="2" class="border border-slate-600 px-2 py-1 text-center">Amal</th>
                             </tr>
                             <tr class="text-[10px] text-slate-400">
                                 <th class="border border-slate-600 px-2 py-1 text-right">summa</th>
                                 <th class="border border-slate-600 px-2 py-1 text-right">oylik</th>
-                                <th class="border border-slate-600 px-2 py-1 text-right text-blue-400">tushgan</th>
-                                <th class="border border-slate-600 px-2 py-1 text-right text-blue-400">oylik</th>
+                                <th class="border border-slate-600 px-2 py-1 text-right text-green-500">tushgan</th>
+                                <th class="border border-slate-600 px-2 py-1 text-right text-green-500">oylik</th>
                                 <th class="border border-slate-600 px-2 py-1 text-right text-red-400">jami</th>
                                 <th class="border border-slate-600 px-2 py-1 text-right text-red-400">o'tgan</th>
                             </tr>
@@ -552,15 +553,15 @@ function formatLotSum($num) {
                             <tr class="bg-slate-700/30 font-bold">
                                 <td class="border border-slate-600 px-2 py-1 text-center"></td>
                                 <td class="border border-slate-600 px-2 py-1 text-white">JAMI:</td>
-                                <td class="border border-slate-600 px-2 py-1 text-center text-blue-400">{{ $allSchedules->count() }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-center text-slate-200">{{ $allSchedules->count() }}</td>
                                 <td class="border border-slate-600 px-2 py-1 text-right text-white">{{ number_format($grandTotal, 0, ',', ' ') }}</td>
                                 <td class="border border-slate-600 px-2 py-1 text-right text-slate-400">{{ $allSchedules->count() > 0 ? number_format($grandTotal / $allSchedules->count(), 0, ',', ' ') : 0 }}</td>
-                                <td class="border border-slate-600 px-2 py-1 text-right text-blue-400">{{ number_format($grandPaid, 0, ',', ' ') }}</td>
-                                <td class="border border-slate-600 px-2 py-1 text-right text-blue-400">{{ $allSchedules->where('tolangan_summa', '>', 0)->count() > 0 ? number_format($grandPaid / $allSchedules->where('tolangan_summa', '>', 0)->count(), 0, ',', ' ') : 0 }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-right text-green-500">{{ number_format($grandPaid, 0, ',', ' ') }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-right text-green-500">{{ $allSchedules->where('tolangan_summa', '>', 0)->count() > 0 ? number_format($grandPaid / $allSchedules->where('tolangan_summa', '>', 0)->count(), 0, ',', ' ') : 0 }}</td>
                                 <td class="border border-slate-600 px-2 py-1 text-right text-red-400">{{ number_format($grandDebt, 0, ',', ' ') }}</td>
                                 <td class="border border-slate-600 px-2 py-1 text-right text-red-400">{{ number_format($grandOverdue, 0, ',', ' ') }}</td>
-                                <td class="border border-slate-600 px-2 py-1 text-center {{ $grandPercent >= 100 ? 'text-green-400' : ($grandPercent >= 50 ? 'text-blue-400' : 'text-red-400') }}">{{ $grandPercent }}%</td>
-                                <td class="border border-slate-600 px-2 py-1 text-right text-amber-400">{{ number_format($grandPenya, 0, ',', ' ') }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-center {{ $grandPercent >= 100 ? 'text-green-500' : 'text-slate-200' }}">{{ $grandPercent }}%</td>
+                                <td class="border border-slate-600 px-2 py-1 text-right text-red-400">{{ number_format($grandPenya, 0, ',', ' ') }}</td>
                                 <td class="border border-slate-600 px-2 py-1"></td>
                             </tr>
                             @foreach($contractYearPeriods as $period)
@@ -569,10 +570,10 @@ function formatLotSum($num) {
                                 $periodScheduleIds = $period['schedules']->pluck('id')->toArray();
                                 $canDeletePeriod = $period['paid'] <= 0;
                             @endphp
-                            <tr class="hover:bg-slate-700/30 {{ $isCurrentPeriod ? 'bg-blue-900/20' : '' }}">
-                                <td class="border border-slate-600 px-2 py-1 text-center {{ $isCurrentPeriod ? 'text-blue-400 font-bold' : '' }}">{{ $period['num'] }}</td>
+                            <tr class="hover:bg-slate-700/30">
+                                <td class="border border-slate-600 px-2 py-1 text-center {{ $isCurrentPeriod ? 'text-slate-200 font-bold' : '' }}">{{ $period['num'] }}</td>
                                 <td class="border border-slate-600 px-2 py-1">
-                                    @if($isCurrentPeriod)<span class="px-1 bg-blue-600 text-white text-[9px] rounded mr-1">JORIY</span>@endif
+                                    @if($isCurrentPeriod)<span class="px-1 bg-slate-600 text-slate-100 text-[9px] rounded mr-1">JORIY</span>@endif
                                     <span class="text-white">{{ $period['start']->format('d.m.Y') }}</span>
                                     <span class="text-slate-500">—</span>
                                     <span class="text-white">{{ $period['end']->format('d.m.Y') }}</span>
@@ -580,12 +581,12 @@ function formatLotSum($num) {
                                 <td class="border border-slate-600 px-2 py-1 text-center">{{ $period['months'] }}</td>
                                 <td class="border border-slate-600 px-2 py-1 text-right text-white">{{ number_format($period['total'], 0, ',', ' ') }}</td>
                                 <td class="border border-slate-600 px-2 py-1 text-right text-slate-400">{{ $period['months'] > 0 ? number_format($period['total'] / $period['months'], 0, ',', ' ') : 0 }}</td>
-                                <td class="border border-slate-600 px-2 py-1 text-right {{ $period['paid'] > 0 ? 'text-blue-400' : 'text-slate-500' }}">{{ number_format($period['paid'], 0, ',', ' ') }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-right {{ $period['paid'] > 0 ? 'text-green-500' : 'text-slate-500' }}">{{ number_format($period['paid'], 0, ',', ' ') }}</td>
                                 <td class="border border-slate-600 px-2 py-1 text-right text-slate-400">{{ $period['schedules']->where('tolangan_summa', '>', 0)->count() > 0 ? number_format($period['paid'] / $period['schedules']->where('tolangan_summa', '>', 0)->count(), 0, ',', ' ') : '—' }}</td>
-                                <td class="border border-slate-600 px-2 py-1 text-right {{ $period['debt'] > 0 ? 'text-red-400' : 'text-green-400' }}">{{ number_format($period['debt'], 0, ',', ' ') }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-right {{ $period['debt'] > 0 ? 'text-red-400' : 'text-slate-200' }}">{{ number_format($period['debt'], 0, ',', ' ') }}</td>
                                 <td class="border border-slate-600 px-2 py-1 text-right {{ $period['overdue'] > 0 ? 'text-red-400' : 'text-slate-500' }}">{{ $period['overdue'] > 0 ? number_format($period['overdue'], 0, ',', ' ') : '—' }}</td>
-                                <td class="border border-slate-600 px-2 py-1 text-center {{ $period['percent'] >= 100 ? 'text-green-400' : ($period['percent'] >= 50 ? 'text-blue-400' : 'text-red-400') }}">{{ $period['percent'] }}%</td>
-                                <td class="border border-slate-600 px-2 py-1 text-right {{ $period['penya'] > 0 ? 'text-amber-400' : 'text-slate-500' }}">{{ $period['penya'] > 0 ? number_format($period['penya'], 0, ',', ' ') : '—' }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-center {{ $period['percent'] >= 100 ? 'text-green-500' : 'text-slate-200' }}">{{ $period['percent'] }}%</td>
+                                <td class="border border-slate-600 px-2 py-1 text-right {{ $period['penya'] > 0 ? 'text-red-400' : 'text-slate-500' }}">{{ $period['penya'] > 0 ? number_format($period['penya'], 0, ',', ' ') : '—' }}</td>
                                 <td class="border border-slate-600 px-2 py-1 text-center">
                                     @if($canDeletePeriod)
                                     <button @click="deletePeriodSchedules([{{ implode(',', $periodScheduleIds) }}])" class="text-slate-500 hover:text-red-400">
@@ -605,12 +606,12 @@ function formatLotSum($num) {
         @endif
 
         <!-- Monthly Details (Expandable) -->
-        <div x-data="{ showDetails: false }" class="border-t border-slate-600">
+        <div x-data="{ showDetails: true }" class="border-t border-slate-600">
             <button @click="showDetails = !showDetails" class="w-full px-4 py-2 text-left text-xs text-slate-400 hover:bg-slate-700/30 flex items-center justify-between">
                 <div class="flex items-center gap-3">
                     <span class="font-medium">Oylik tafsilotlar (Joriy davr)</span>
                     @if($currentPeriod)
-                    <span class="text-[10px] px-2 py-0.5 bg-blue-900/30 text-blue-300 rounded">{{ $currentPeriod['schedules']->count() }} oy</span>
+                    <span class="text-[10px] px-2 py-0.5 bg-slate-700/50 text-slate-300 rounded">{{ $currentPeriod['schedules']->count() }} oy</span>
                     @endif
                 </div>
                 <svg :class="showDetails ? 'rotate-180' : ''" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
@@ -624,14 +625,14 @@ function formatLotSum($num) {
                             <th class="border border-slate-600 px-2 py-1 text-center">Muddat</th>
                             <th class="border border-slate-600 px-2 py-1 text-right">Grafik</th>
                             <th class="border border-slate-600 px-2 py-1 text-right" title="Shu oyda naqd tushgan to'lovlar yig'indisi (FIFO taqsimotidan mustaqil)">Fakt tushgan</th>
-                            <th class="border border-slate-600 px-2 py-1 text-right" title="FIFO orqali asosiy qarzga yo'naltirilgan summa">To'langan (asosiy)</th>
                             <th class="border border-slate-600 px-2 py-1 text-center">To'lov sanasi</th>
-                            <th class="border border-slate-600 px-2 py-1 text-right">Qoldiq</th>
+                            <th class="border border-slate-600 px-2 py-1 text-right" title="Qoldiq: muddat o'tib, shu kalendar oyda tushim bo'lmasa — grafik reja summasi (qarz)">Qoldiq</th>
                             <th class="border border-slate-600 px-2 py-1 text-center">Kun</th>
                             <th class="border border-slate-600 px-2 py-1 text-center">Stavka</th>
                             <th class="border border-slate-600 px-2 py-1 text-right">Penya hisob</th>
                             <th class="border border-slate-600 px-2 py-1 text-right">To'l. penya</th>
                             <th class="border border-slate-600 px-2 py-1 text-right">Qol. penya</th>
+                            <th class="border border-slate-600 px-2 py-1 text-left min-w-[100px] max-w-xs">Izoh</th>
                             <th class="border border-slate-600 px-2 py-1 text-center">Amal</th>
                         </tr>
                     </thead>
@@ -655,6 +656,11 @@ function formatLotSum($num) {
                                 $penyaHisob = $scheduleData['penya_summasi'];
                                 $qoldiqPenya = $scheduleData['qoldiq_penya'];
                                 $lastPaymentDate = $scheduleData['payment_date'] ? \Carbon\Carbon::parse($scheduleData['payment_date']) : null;
+                                $highlightDebt = $scheduleData['highlight_active_debt'] ?? false;
+                                $kunK = $scheduleData['kun_ko_rinishi'] ?? null;
+                                $kunTitleCell = trim(($scheduleData['muddat_ozgarish_izoh'] ?? '') . (empty($scheduleData['kun_ko_rinishi_izoh']) ? '' : ' ' . $scheduleData['kun_ko_rinishi_izoh']));
+                                $kunJamiAkt = !empty($scheduleData['kun_jami_akt']);
+                                $qarzKo = $scheduleData['qarz_ko_rinishi'] ?? 'oddiy';
                             @endphp
                             <tr x-data="{
                                 editing: false,
@@ -665,19 +671,22 @@ function formatLotSum($num) {
                                     tolov_summasi: {{ $scheduleData['tolov_summasi'] }}
                                 }
                             }"
-                                class="{{ $isOverdue && $scheduleData['qoldiq_summa'] > 0 ? 'bg-red-900/10' : '' }} hover:bg-slate-700/30">
+                                class="hover:bg-slate-700/30"
+                            >
                                 <td class="border border-slate-600 px-2 py-1 text-center">{{ $rowNum }}</td>
                                 <td class="border border-slate-600 px-2 py-1">
                                     {{ $scheduleData['month_name'] }} {{ $scheduleData['year'] }}
-                                    @if($isCurrentMonth)<span class="text-[9px] text-blue-400">(joriy)</span>@endif
+                                    @if($isCurrentMonth)<span class="text-[9px] text-slate-400">(joriy)</span>@endif
+                                    @if($qarzKo === 'qarzdor_fakt')<span class="ml-1 inline-block text-[8px] font-semibold text-red-300 border border-red-500/40 px-1 rounded align-middle" title="Kalendar: shu oydan fakt tushim yo'q, qarz">Qarzdor</span>@endif
+                                    @if($qarzKo === 'kutilayotgan')<span class="ml-1 inline-block text-[8px] text-slate-300 border border-slate-500/50 px-1 rounded align-middle" title="Oxirgi muddat hali kelmadi">Kutilayotgan</span>@endif
                                 </td>
                                 {{-- MUDDAT COLUMN: Shows effective deadline with edit option --}}
                                 <td class="border border-slate-600 px-2 py-1 text-center">
                                     <template x-if="!editing">
                                         <div>
-                                            <span class="{{ $hasCustomDeadline ? 'text-blue-300' : '' }}">{{ $effectiveDeadline->format('d.m.Y') }}</span>
+                                            <span class="{{ $hasCustomDeadline ? 'text-slate-200' : '' }}">{{ $effectiveDeadline->format('d.m.Y') }}</span>
                                             @if($hasCustomDeadline)
-                                                <span class="text-[8px] text-blue-400 ml-0.5" title="Asl muddat: {{ $originalDeadline->format('d.m.Y') }}">*</span>
+                                                <span class="text-[8px] text-slate-400 ml-0.5" title="Asl muddat: {{ $originalDeadline->format('d.m.Y') }}">*</span>
                                             @endif
                                         </div>
                                     </template>
@@ -685,51 +694,59 @@ function formatLotSum($num) {
                                         <input type="date" x-model="form.new_deadline" class="w-full border border-slate-500 bg-slate-700 rounded px-1 py-0.5 text-xs text-white">
                                     </template>
                                 </td>
-                                <td class="border border-slate-600 px-2 py-1 text-right text-white"
+                                <td class="border border-slate-600 px-2 py-1 text-right text-slate-200"
                                     @if(!empty($scheduleData['pro_rata_tooltip'])) title="{{ $scheduleData['pro_rata_tooltip'] }}" @endif>
                                     <template x-if="!editing">
                                         <span>
                                             {{ number_format($scheduleData['tolov_summasi'], 0, ',', ' ') }}
                                             @if(!empty($scheduleData['is_pro_rata']))
-                                                <span class="text-[8px] text-amber-400 ml-0.5" title="Qisman oy (pro-rata)">⊘</span>
+                                                <span class="text-[8px] text-slate-400 ml-0.5" title="Qisman oy (pro-rata)">⊘</span>
                                             @endif
                                         </span>
                                     </template>
                                     <template x-if="editing"><input type="number" x-model="form.tolov_summasi" class="w-full border border-slate-500 bg-slate-700 rounded px-1 py-0.5 text-xs text-right text-white"></template>
                                 </td>
                                 @php $ft = (float) ($scheduleData['fakt_tushgan'] ?? 0); $faktDocs = $scheduleData['fakt_payments'] ?? []; @endphp
-                                <td class="border border-slate-600 px-2 py-1 text-right {{ $ft > 0 ? 'text-emerald-400 font-semibold' : 'text-slate-500' }}"
+                                <td class="border border-slate-600 px-2 py-1 text-right {{ $ft > 0 ? 'text-green-500 font-semibold' : 'text-slate-500' }}"
                                     @if($ft > 0 && count($faktDocs))
                                         title="{{ collect($faktDocs)->map(fn($d) => $d['sana'].': +'.number_format($d['summa'],0,',',' ').($d['hujjat'] ? ' ('.$d['hujjat'].')' : ''))->implode('&#10;') }}"
                                     @endif
                                 >{{ $ft > 0 ? '+'.number_format($ft, 0, ',', ' ') : '—' }}</td>
-                                <td class="border border-slate-600 px-2 py-1 text-right {{ $scheduleData['tolangan_summa'] > 0 ? 'text-blue-400' : 'text-slate-500' }}">{{ $scheduleData['tolangan_summa'] > 0 ? number_format($scheduleData['tolangan_summa'], 0, ',', ' ') : '—' }}</td>
                                 <td class="border border-slate-600 px-2 py-1 text-center text-slate-400">{{ $lastPaymentDate ? $lastPaymentDate->format('d.m.Y') : '—' }}</td>
-                                {{-- QOLDIQ: Only show for past months (deadline passed), hide for future months --}}
-                                <td class="border border-slate-600 px-2 py-1 text-right {{ $scheduleData['qoldiq_summa'] > 0 ? 'text-red-400' : 'text-green-400' }}">
-                                    @if($isOverdue || $isCurrentMonth || $scheduleData['tolangan_summa'] > 0)
-                                        {{ $scheduleData['qoldiq_summa'] > 0 ? number_format($scheduleData['qoldiq_summa'], 0, ',', ' ') : '—' }}
+                                {{-- QOLDIQ: muddat o'tib, shu oyda tushim yo'q — grafik reja (service qoldiq_summa) --}}
+                                <td class="border border-slate-600 px-2 py-1 text-right align-top {{ $scheduleData['qoldiq_summa'] > 0 ? 'text-red-400' : 'text-slate-200' }}"
+                                    @if(!empty($scheduleData['qoldiq_usti_title'])) title="{{ e($scheduleData['qoldiq_usti_title']) }}" @endif
+                                >
+                                    @if(!empty($scheduleData['qoldiq_hujayra_ochilishi']))
+                                        @if($scheduleData['qoldiq_summa'] > 0)
+                                            {{ number_format($scheduleData['qoldiq_summa'], 0, ',', ' ') }}
+                                        @else
+                                            <span class="text-slate-400">0</span>
+                                        @endif
                                     @else
                                         —
                                     @endif
                                 </td>
-                                {{-- KUN COLUMN: Shows days overdue (red) or days left (green), from service --}}
-                                <td class="border border-slate-600 px-2 py-1 text-center {{ $isOverdue ? 'text-red-400 font-semibold' : ($daysLeft > 0 ? 'text-green-400' : 'text-slate-400') }}"
-                                    title="{{ $scheduleData['muddat_ozgarish_izoh'] ?? '' }}">
-                                    @if($isOverdue)
-                                        {{ $overdueDays }}
-                                        @if($hasCustomDeadline)<span class="text-[8px] text-blue-400 ml-0.5">*</span>@endif
-                                    @elseif($daysLeft > 0)
-                                        {{ $daysLeft }}
-                                        @if($hasCustomDeadline)<span class="text-[8px] text-blue-400 ml-0.5">*</span>@endif
+                                {{-- KUN: joriy kechikish, muddatgacha, yoki jami kechikish (DB) --}}
+                                <td class="border border-slate-600 px-2 py-1 text-center font-semibold
+                                    @if($kunK === null) text-slate-400
+                                    @elseif($kunJamiAkt) text-red-400
+                                    @elseif($isOverdue) text-red-400
+                                    @elseif($daysLeft > 0) text-slate-200
+                                    @else text-slate-400 @endif
+                                " title="{{ $kunTitleCell }}">
+                                    @if($kunK !== null)
+                                        {{ $kunK }}
+                                        @if($hasCustomDeadline)<span class="text-[8px] text-slate-400 ml-0.5">*</span>@endif
                                     @else
                                         —
                                     @endif
                                 </td>
                                 <td class="border border-slate-600 px-2 py-1 text-center text-slate-400">{{ $scheduleData['penya_rate'] ?? '—' }}</td>
-                                <td class="border border-slate-600 px-2 py-1 text-right {{ $penyaHisob > 0 ? 'text-amber-400' : 'text-slate-500' }}">{{ $penyaHisob > 0 ? number_format($penyaHisob, 0, ',', ' ') : '—' }}</td>
-                                <td class="border border-slate-600 px-2 py-1 text-right {{ $tolanganPenya > 0 ? 'text-green-400' : 'text-slate-500' }}">{{ $tolanganPenya > 0 ? number_format($tolanganPenya, 0, ',', ' ') : '—' }}</td>
-                                <td class="border border-slate-600 px-2 py-1 text-right {{ $qoldiqPenya > 0 ? 'text-amber-400' : ($tolanganPenya > 0 ? 'text-green-400' : 'text-slate-500') }}">{{ $qoldiqPenya > 0 ? number_format($qoldiqPenya, 0, ',', ' ') : ($tolanganPenya > 0 ? '✓' : '—') }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-right {{ $penyaHisob > 0 ? 'text-red-400' : 'text-slate-500' }}">{{ $penyaHisob > 0 ? number_format($penyaHisob, 0, ',', ' ') : '—' }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-right {{ $tolanganPenya > 0 ? 'text-slate-200' : 'text-slate-500' }}">{{ $tolanganPenya > 0 ? number_format($tolanganPenya, 0, ',', ' ') : '—' }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-right {{ $qoldiqPenya > 0 ? 'text-red-400' : ($tolanganPenya > 0 ? 'text-slate-200' : 'text-slate-500') }}">{{ $qoldiqPenya > 0 ? number_format($qoldiqPenya, 0, ',', ' ') : ($tolanganPenya > 0 ? '✓' : '—') }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-[10px] leading-snug text-slate-400 align-top max-w-xs">{{ $scheduleData['qator_izoh'] ?? '—' }}</td>
                                 <td class="border border-slate-600 px-1 py-1 text-center">
                                     <template x-if="!editing">
                                         <div class="flex items-center justify-center gap-1">
@@ -775,14 +792,14 @@ function formatLotSum($num) {
                             <th class="border border-slate-600 px-2 py-1 text-center">Muddat</th>
                             <th class="border border-slate-600 px-2 py-1 text-right">Grafik</th>
                             <th class="border border-slate-600 px-2 py-1 text-right" title="Shu oyda naqd tushgan to'lovlar yig'indisi (FIFO taqsimotidan mustaqil)">Fakt tushgan</th>
-                            <th class="border border-slate-600 px-2 py-1 text-right" title="FIFO orqali asosiy qarzga yo'naltirilgan summa">To'langan (asosiy)</th>
                             <th class="border border-slate-600 px-2 py-1 text-center">To'lov sanasi</th>
-                            <th class="border border-slate-600 px-2 py-1 text-right">Qoldiq</th>
+                            <th class="border border-slate-600 px-2 py-1 text-right" title="Qoldiq: muddat o'tib, shu kalendar oyda tushim bo'lmasa — grafik reja summasi (qarz)">Qoldiq</th>
                             <th class="border border-slate-600 px-2 py-1 text-center">Kun</th>
                             <th class="border border-slate-600 px-2 py-1 text-center">Stavka</th>
                             <th class="border border-slate-600 px-2 py-1 text-right">Penya hisob</th>
                             <th class="border border-slate-600 px-2 py-1 text-right">To'l. penya</th>
                             <th class="border border-slate-600 px-2 py-1 text-right">Qol. penya</th>
+                            <th class="border border-slate-600 px-2 py-1 text-left min-w-[100px] max-w-xs">Izoh</th>
                             <th class="border border-slate-600 px-2 py-1 text-center">Amal</th>
                         </tr>
                     </thead>
@@ -805,6 +822,11 @@ function formatLotSum($num) {
                                 $penyaHisob = $scheduleData['penya_summasi'];
                                 $qoldiqPenya = $scheduleData['qoldiq_penya'];
                                 $lastPaymentDate = $scheduleData['payment_date'] ? \Carbon\Carbon::parse($scheduleData['payment_date']) : null;
+                                $highlightDebt = $scheduleData['highlight_active_debt'] ?? false;
+                                $kunK = $scheduleData['kun_ko_rinishi'] ?? null;
+                                $kunTitleCell = trim(($scheduleData['muddat_ozgarish_izoh'] ?? '') . (empty($scheduleData['kun_ko_rinishi_izoh']) ? '' : ' ' . $scheduleData['kun_ko_rinishi_izoh']));
+                                $kunJamiAkt = !empty($scheduleData['kun_jami_akt']);
+                                $qarzKo = $scheduleData['qarz_ko_rinishi'] ?? 'oddiy';
                             @endphp
                             <tr x-data="{
                                 editing: false,
@@ -815,18 +837,21 @@ function formatLotSum($num) {
                                     tolov_summasi: {{ $scheduleData['tolov_summasi'] }}
                                 }
                             }"
-                                class="{{ $isOverdue && $scheduleData['qoldiq_summa'] > 0 ? 'bg-red-900/10' : '' }} hover:bg-slate-700/30">
+                                class="hover:bg-slate-700/30"
+                            >
                                 <td class="border border-slate-600 px-2 py-1 text-center">{{ $rowNum }}</td>
                                 <td class="border border-slate-600 px-2 py-1">
                                     {{ $scheduleData['month_name'] }} {{ $scheduleData['year'] }}
-                                    @if($isCurrentMonth)<span class="text-[9px] text-blue-400">(joriy)</span>@endif
+                                    @if($isCurrentMonth)<span class="text-[9px] text-slate-400">(joriy)</span>@endif
+                                    @if($qarzKo === 'qarzdor_fakt')<span class="ml-1 inline-block text-[8px] font-semibold text-red-300 border border-red-500/40 px-1 rounded align-middle" title="Kalendar: shu oydan fakt tushim yo'q, qarz">Qarzdor</span>@endif
+                                    @if($qarzKo === 'kutilayotgan')<span class="ml-1 inline-block text-[8px] text-slate-300 border border-slate-500/50 px-1 rounded align-middle" title="Oxirgi muddat hali kelmadi">Kutilayotgan</span>@endif
                                 </td>
                                 <td class="border border-slate-600 px-2 py-1 text-center">
                                     <template x-if="!editing">
                                         <div>
-                                            <span class="{{ $hasCustomDeadline ? 'text-blue-300' : '' }}">{{ $effectiveDeadline->format('d.m.Y') }}</span>
+                                            <span class="{{ $hasCustomDeadline ? 'text-slate-200' : '' }}">{{ $effectiveDeadline->format('d.m.Y') }}</span>
                                             @if($hasCustomDeadline)
-                                                <span class="text-[8px] text-blue-400 ml-0.5" title="Asl muddat: {{ $originalDeadline->format('d.m.Y') }}">*</span>
+                                                <span class="text-[8px] text-slate-400 ml-0.5" title="Asl muddat: {{ $originalDeadline->format('d.m.Y') }}">*</span>
                                             @endif
                                         </div>
                                     </template>
@@ -834,50 +859,57 @@ function formatLotSum($num) {
                                         <input type="date" x-model="form.new_deadline" class="w-full border border-slate-500 bg-slate-700 rounded px-1 py-0.5 text-xs text-white">
                                     </template>
                                 </td>
-                                <td class="border border-slate-600 px-2 py-1 text-right text-white"
+                                <td class="border border-slate-600 px-2 py-1 text-right text-slate-200"
                                     @if(!empty($scheduleData['pro_rata_tooltip'])) title="{{ $scheduleData['pro_rata_tooltip'] }}" @endif>
                                     <template x-if="!editing">
                                         <span>
                                             {{ number_format($scheduleData['tolov_summasi'], 0, ',', ' ') }}
                                             @if(!empty($scheduleData['is_pro_rata']))
-                                                <span class="text-[8px] text-amber-400 ml-0.5" title="Qisman oy (pro-rata)">⊘</span>
+                                                <span class="text-[8px] text-slate-400 ml-0.5" title="Qisman oy (pro-rata)">⊘</span>
                                             @endif
                                         </span>
                                     </template>
                                     <template x-if="editing"><input type="number" x-model="form.tolov_summasi" class="w-full border border-slate-500 bg-slate-700 rounded px-1 py-0.5 text-xs text-right text-white"></template>
                                 </td>
                                 @php $ft = (float) ($scheduleData['fakt_tushgan'] ?? 0); $faktDocs = $scheduleData['fakt_payments'] ?? []; @endphp
-                                <td class="border border-slate-600 px-2 py-1 text-right {{ $ft > 0 ? 'text-emerald-400 font-semibold' : 'text-slate-500' }}"
+                                <td class="border border-slate-600 px-2 py-1 text-right {{ $ft > 0 ? 'text-green-500 font-semibold' : 'text-slate-500' }}"
                                     @if($ft > 0 && count($faktDocs))
                                         title="{{ collect($faktDocs)->map(fn($d) => $d['sana'].': +'.number_format($d['summa'],0,',',' ').($d['hujjat'] ? ' ('.$d['hujjat'].')' : ''))->implode('&#10;') }}"
                                     @endif
                                 >{{ $ft > 0 ? '+'.number_format($ft, 0, ',', ' ') : '—' }}</td>
-                                <td class="border border-slate-600 px-2 py-1 text-right {{ $scheduleData['tolangan_summa'] > 0 ? 'text-blue-400' : 'text-slate-500' }}">{{ $scheduleData['tolangan_summa'] > 0 ? number_format($scheduleData['tolangan_summa'], 0, ',', ' ') : '—' }}</td>
                                 <td class="border border-slate-600 px-2 py-1 text-center text-slate-400">{{ $lastPaymentDate ? $lastPaymentDate->format('d.m.Y') : '—' }}</td>
-                                {{-- QOLDIQ: Only show for past months (deadline passed), hide for future months --}}
-                                <td class="border border-slate-600 px-2 py-1 text-right {{ $scheduleData['qoldiq_summa'] > 0 ? 'text-red-400' : 'text-green-400' }}">
-                                    @if($isOverdue || $isCurrentMonth || $scheduleData['tolangan_summa'] > 0)
-                                        {{ $scheduleData['qoldiq_summa'] > 0 ? number_format($scheduleData['qoldiq_summa'], 0, ',', ' ') : '—' }}
+                                <td class="border border-slate-600 px-2 py-1 text-right align-top {{ $scheduleData['qoldiq_summa'] > 0 ? 'text-red-400' : 'text-slate-200' }}"
+                                    @if(!empty($scheduleData['qoldiq_usti_title'])) title="{{ e($scheduleData['qoldiq_usti_title']) }}" @endif
+                                >
+                                    @if(!empty($scheduleData['qoldiq_hujayra_ochilishi']))
+                                        @if($scheduleData['qoldiq_summa'] > 0)
+                                            {{ number_format($scheduleData['qoldiq_summa'], 0, ',', ' ') }}
+                                        @else
+                                            <span class="text-slate-400">0</span>
+                                        @endif
                                     @else
                                         —
                                     @endif
                                 </td>
-                                <td class="border border-slate-600 px-2 py-1 text-center {{ $isOverdue ? 'text-red-400 font-semibold' : ($daysLeft > 0 ? 'text-green-400' : 'text-slate-400') }}"
-                                    title="{{ $scheduleData['muddat_ozgarish_izoh'] ?? '' }}">
-                                    @if($isOverdue)
-                                        {{ $overdueDays }}
-                                        @if($hasCustomDeadline)<span class="text-[8px] text-blue-400 ml-0.5">*</span>@endif
-                                    @elseif($daysLeft > 0)
-                                        {{ $daysLeft }}
-                                        @if($hasCustomDeadline)<span class="text-[8px] text-blue-400 ml-0.5">*</span>@endif
+                                <td class="border border-slate-600 px-2 py-1 text-center font-semibold
+                                    @if($kunK === null) text-slate-400
+                                    @elseif($kunJamiAkt) text-red-400
+                                    @elseif($isOverdue) text-red-400
+                                    @elseif($daysLeft > 0) text-slate-200
+                                    @else text-slate-400 @endif
+                                " title="{{ $kunTitleCell }}">
+                                    @if($kunK !== null)
+                                        {{ $kunK }}
+                                        @if($hasCustomDeadline)<span class="text-[8px] text-slate-400 ml-0.5">*</span>@endif
                                     @else
                                         —
                                     @endif
                                 </td>
                                 <td class="border border-slate-600 px-2 py-1 text-center text-slate-400">{{ $scheduleData['penya_rate'] ?? '—' }}</td>
-                                <td class="border border-slate-600 px-2 py-1 text-right {{ $penyaHisob > 0 ? 'text-amber-400' : 'text-slate-500' }}">{{ $penyaHisob > 0 ? number_format($penyaHisob, 0, ',', ' ') : '—' }}</td>
-                                <td class="border border-slate-600 px-2 py-1 text-right {{ $tolanganPenya > 0 ? 'text-green-400' : 'text-slate-500' }}">{{ $tolanganPenya > 0 ? number_format($tolanganPenya, 0, ',', ' ') : '—' }}</td>
-                                <td class="border border-slate-600 px-2 py-1 text-right {{ $qoldiqPenya > 0 ? 'text-amber-400' : ($tolanganPenya > 0 ? 'text-green-400' : 'text-slate-500') }}">{{ $qoldiqPenya > 0 ? number_format($qoldiqPenya, 0, ',', ' ') : ($tolanganPenya > 0 ? '✓' : '—') }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-right {{ $penyaHisob > 0 ? 'text-red-400' : 'text-slate-500' }}">{{ $penyaHisob > 0 ? number_format($penyaHisob, 0, ',', ' ') : '—' }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-right {{ $tolanganPenya > 0 ? 'text-slate-200' : 'text-slate-500' }}">{{ $tolanganPenya > 0 ? number_format($tolanganPenya, 0, ',', ' ') : '—' }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-right {{ $qoldiqPenya > 0 ? 'text-red-400' : ($tolanganPenya > 0 ? 'text-slate-200' : 'text-slate-500') }}">{{ $qoldiqPenya > 0 ? number_format($qoldiqPenya, 0, ',', ' ') : ($tolanganPenya > 0 ? '✓' : '—') }}</td>
+                                <td class="border border-slate-600 px-2 py-1 text-[10px] leading-snug text-slate-400 align-top max-w-xs">{{ $scheduleData['qator_izoh'] ?? '—' }}</td>
                                 <td class="border border-slate-600 px-1 py-1 text-center">
                                     <template x-if="!editing">
                                         <div class="flex items-center justify-center gap-1">
@@ -1013,7 +1045,7 @@ function formatLotSum($num) {
     <div class="bg-slate-800/50 backdrop-blur border border-slate-700/50 rounded-xl overflow-hidden">
         <div class="px-4 py-2 border-b border-slate-700/50 flex items-center justify-between bg-slate-800/80">
             <h3 class="font-bold text-white text-sm">To'lovlar tarixi</h3>
-            <span class="text-xs text-emerald-400">{{ $approvedPayments->count() }} ta</span>
+            <span class="text-xs text-slate-300">{{ $approvedPayments->count() }} ta</span>
         </div>
 
         @if($approvedPayments->count() > 0)
@@ -1037,9 +1069,9 @@ function formatLotSum($num) {
                     <tr class="hover:bg-slate-700/30">
                         <td class="border border-slate-600 px-2 py-1.5 text-slate-400 font-mono">{{ $payment->tolov_raqami }}</td>
                         <td class="border border-slate-600 px-2 py-1.5 text-white font-medium whitespace-nowrap">{{ $paymentDate->format('d.m.Y') }}</td>
-                        <td class="border border-slate-600 px-2 py-1.5 text-right text-emerald-400 font-bold">+{{ number_format($payment->summa, 0, '', ' ') }}</td>
+                        <td class="border border-slate-600 px-2 py-1.5 text-right text-green-500 font-bold">+{{ number_format($payment->summa, 0, '', ' ') }}</td>
                         <td class="border border-slate-600 px-2 py-1.5 text-right text-slate-300">{{ number_format((float) $payment->asosiy_qarz_uchun, 0, '', ' ') }}</td>
-                        <td class="border border-slate-600 px-2 py-1.5 text-right text-blue-300">{{ number_format((float) $payment->avans, 0, '', ' ') }}</td>
+                        <td class="border border-slate-600 px-2 py-1.5 text-right text-slate-300">{{ number_format((float) $payment->avans, 0, '', ' ') }}</td>
                         <td class="border border-slate-600 px-2 py-1.5 text-center text-slate-400">{{ ['naqd' => 'Naqd', 'plastik' => 'Karta', 'bank' => 'Bank', 'bank_otkazmasi' => 'Bank', 'karta' => 'Karta', 'onlayn' => 'Onlayn'][$payment->tolov_usuli] ?? 'Bank' }}</td>
                         <td class="border border-slate-600 px-2 py-1.5 text-slate-400 text-[11px]" title="{{ $payment->izoh }}">{{ \Illuminate\Support\Str::limit($payment->hujjat_raqami ?? '-', 20) }}</td>
                         <td class="border border-slate-600 px-2 py-1.5 text-center">
@@ -1057,8 +1089,8 @@ function formatLotSum($num) {
 
         <!-- Jami to'langan -->
         <div class="px-4 py-2 border-t border-slate-700/50 flex items-center justify-between bg-slate-800/60">
-            <span class="text-sm text-emerald-400 font-medium">Jami to'langan:</span>
-            <span class="text-lg font-bold text-emerald-400">{{ number_format($approvedPayments->sum('summa'), 0, '', ' ') }} UZS</span>
+            <span class="text-sm text-slate-300 font-medium">Jami to'langan:</span>
+            <span class="text-lg font-bold text-green-500">{{ number_format($approvedPayments->sum('summa'), 0, '', ' ') }} UZS</span>
         </div>
         @else
         <div class="px-4 py-6 text-center text-slate-500 text-sm">To'lovlar yo'q</div>
@@ -1151,8 +1183,8 @@ function formatLotSum($num) {
                 @endif
                 @if($grandPenya > 0)
                 <div class="flex justify-between items-center mt-1">
-                    <span class="text-xs text-amber-600">Penya (hisoblangan, informatsion):</span>
-                    <span class="text-sm font-medium text-amber-600">{{ number_format($grandPenya, 0, ',', ' ') }}</span>
+                    <span class="text-xs text-red-600">Penya (hisoblangan, informatsion):</span>
+                    <span class="text-sm font-medium text-red-600">{{ number_format($grandPenya, 0, ',', ' ') }}</span>
                 </div>
                 @endif
                 <div class="mt-2 pt-2 border-t border-red-200 text-[11px] text-gray-500 leading-tight">

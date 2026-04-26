@@ -68,10 +68,20 @@ class ScheduleDisplayService
         Carbon $today,
         bool $isContractExpired
     ): array {
-        $paymentDue10th = Carbon::create($schedule->yil, $schedule->oy, 10);
+        $boshlanishSanasi = Carbon::parse($contract->boshlanish_sanasi);
         $deadline = $schedule->custom_oxirgi_muddat
             ? Carbon::parse($schedule->custom_oxirgi_muddat)
             : Carbon::parse($schedule->oxirgi_muddat);
+
+        // 1-grafik: reja muddati va ko'rsatiladigan muddat shartnoma boshlanish sanasidan
+        // (qolgan oylar: DB dagi tolov/oxirgi_muddat, odatda to'lov kuni 10).
+        if (!$schedule->custom_oxirgi_muddat && (int) $schedule->oy_raqami === 1) {
+            $deadline = $boshlanishSanasi->copy();
+        }
+
+        $planPaymentDate = (!$schedule->custom_oxirgi_muddat && (int) $schedule->oy_raqami === 1)
+            ? $boshlanishSanasi->copy()
+            : Carbon::parse($schedule->tolov_sanasi);
 
         $currentMonth = $today->month;
         $currentYear = $today->year;
@@ -83,7 +93,6 @@ class ScheduleDisplayService
         // Calculate days and overdue status
         $daysData = $this->calculateDaysAndOverdue(
             $schedule,
-            $paymentDue10th,
             $deadline,
             $today,
             $isCurrentMonth,
@@ -121,6 +130,37 @@ class ScheduleDisplayService
             ];
         })->all();
 
+        $rowMeta = $this->buildJadvalRowMeta(
+            $schedule,
+            $daysData,
+            $penaltyData,
+            $deadline,
+            $today,
+            $isCurrentMonth,
+            $faktTushgan
+        );
+
+        $qarzKo = $rowMeta['qarz_ko_rinishi'] ?? 'oddiy';
+        $qoldiqForDisplay = (float) $schedule->qoldiq_summa;
+        if ($qarzKo === 'qarzdor_fakt' && (float) $schedule->tolov_summasi > 0) {
+            $qoldiqForDisplay = (float) $schedule->tolov_summasi;
+        }
+        if ($qarzKo === 'kutilayotgan') {
+            $qoldiqForDisplay = 0.0;
+            $rowMeta['qoldiq_hujayra_ochilishi'] = false;
+            $rowMeta['kun_ko_rinishi'] = null;
+            $rowMeta['kun_ko_rinishi_izoh'] = null;
+            $rowMeta['kun_jami_akt'] = false;
+            $rowMeta['qator_izoh'] = "Faqat reja. Oxirgi muddatgacha: qarz, penya, qolgan kun bu ustunlarda yig'ilmaydi (muddati kelayotganda alohida hisoblanadi).";
+            $rowMeta['qoldiq_usti_title'] = null;
+            $rowMeta['penya_rate'] = null;
+        }
+        $hasActiveDebtDisplay = $qoldiqForDisplay > 0.0001 && $daysData['is_overdue'];
+
+        $penyaSummasi = $qarzKo === 'kutilayotgan' ? 0.0 : (float) $penaltyData['penya_summasi'];
+        $qoldiqPenya = $qarzKo === 'kutilayotgan' ? 0.0 : (float) $penaltyData['qoldiq_penya'];
+        $tolanganPenya = $qarzKo === 'kutilayotgan' ? 0.0 : (float) ($schedule->tolangan_penya ?? 0);
+
         return [
             'id' => $schedule->id,
             'month' => $schedule->oy,
@@ -133,25 +173,35 @@ class ScheduleDisplayService
             'tolangan_summa' => $schedule->tolangan_summa,   // FIFO orqali asosiy qarzga yo'naltirilgan
             'fakt_tushgan' => $faktTushgan,                  // shu oyda real tushgan naqd (FIFO dan mustaqil)
             'fakt_payments' => $faktDocs,                    // tooltip uchun to'lovlar ro'yxati
-            'qoldiq_summa' => $schedule->qoldiq_summa,
+            'qoldiq_summa' => $qoldiqForDisplay,
 
             // Dates
-            'tolov_sanasi' => $schedule->tolov_sanasi,
+            'tolov_sanasi' => $planPaymentDate->format('Y-m-d'),
             'oxirgi_muddat' => $schedule->oxirgi_muddat,
             'custom_oxirgi_muddat' => $schedule->custom_oxirgi_muddat,
             'effective_deadline' => $deadline->format('Y-m-d'),
             'payment_date' => $daysData['payment_date'],
 
             // Days and overdue
-            'days_left' => $daysData['days_left'],
+            'days_left' => $qarzKo === 'kutilayotgan' ? 0 : $daysData['days_left'],
             'overdue_days' => $daysData['overdue_days'],
             'is_overdue' => $daysData['is_overdue'],
 
+            // Jadval: Qoldiq/Kun/izoh (FIFO+penya tufayli "bo'sh" qatorlarni tushuntirish)
+            'kechikish_kunlari' => $qarzKo === 'kutilayotgan' ? 0 : (int) ($schedule->kechikish_kunlari ?? 0),
+            'kun_ko_rinishi' => $rowMeta['kun_ko_rinishi'],
+            'kun_ko_rinishi_izoh' => $rowMeta['kun_ko_rinishi_izoh'],
+            'kun_jami_akt' => $rowMeta['kun_jami_akt'],
+            'qoldiq_hujayra_ochilishi' => $rowMeta['qoldiq_hujayra_ochilishi'],
+            'qator_izoh' => $rowMeta['qator_izoh'],
+            'qoldiq_usti_title' => $rowMeta['qoldiq_usti_title'] ?? null,
+            'qarz_ko_rinishi' => $rowMeta['qarz_ko_rinishi'] ?? 'oddiy',
+
             // Penalty
-            'penya_summasi' => $penaltyData['penya_summasi'],
-            'tolangan_penya' => $schedule->tolangan_penya ?? 0,
-            'qoldiq_penya' => $penaltyData['qoldiq_penya'],
-            'penya_rate' => $daysData['is_overdue'] ? '0,4%' : null,
+            'penya_summasi' => $penyaSummasi,
+            'tolangan_penya' => $tolanganPenya,
+            'qoldiq_penya' => $qoldiqPenya,
+            'penya_rate' => $rowMeta['penya_rate'],
 
             // Status
             'holat' => $schedule->holat,
@@ -162,6 +212,120 @@ class ScheduleDisplayService
             // Pro-rata
             'is_pro_rata' => $proRata['is_pro_rata'],
             'pro_rata_tooltip' => $proRata['tooltip'],
+
+            // Yoritish: faqat hozirgi aktiv qarz
+            'highlight_active_debt' => $hasActiveDebtDisplay,
+        ];
+    }
+
+    /**
+     * Qarz, kun va penya o'rtasidagi farqni tushuntirish: asosiy 0 (FIFO) bo'lganda
+     * "Kun" va "Qoldiq" ustunlari bo'sh qolmasin; "jami kechikish" (DB) va izoh.
+     *
+     * @return array{
+     *   kun_ko_rinishi: ?int,
+     *   kun_ko_rinishi_izoh: ?string,
+     *   qoldiq_hujayra_ochilishi: bool,
+     *   qator_izoh: ?string,
+     *   qoldiq_usti_title: ?string,
+     *   qarz_ko_rinishi: 'qarzdor_fakt'|'kutilayotgan'|'oddiy',
+     *   penya_rate: ?string
+     * }
+     */
+    private function buildJadvalRowMeta(
+        PaymentSchedule $schedule,
+        array $daysData,
+        array $penaltyData,
+        Carbon $deadline,
+        Carbon $today,
+        bool $isCurrentMonth,
+        float $faktTushgan
+    ): array {
+        $kArxiv = (int) ($schedule->kechikish_kunlari ?? 0);
+        $q = (float) $schedule->qoldiq_summa;
+        $pen = (float) ($schedule->penya_summasi ?? 0);
+        $penTol = (float) ($schedule->tolangan_penya ?? 0);
+        $qPen = (float) ($penaltyData['qoldiq_penya'] ?? 0);
+        $tol = (float) ($schedule->tolangan_summa ?? 0);
+
+        $deadlineOtkan = $deadline->copy()->startOfDay()->lt($today->copy()->startOfDay());
+
+        $anyPenyaGraf = $pen > 0.0001 || $penTol > 0.0001 || $qPen > 0.0001;
+
+        $penyaRate = ($anyPenyaGraf || $daysData['is_overdue']) ? '0,4%' : null;
+
+        $kunK = null;
+        $kunT = null;
+        $kunJami = false;
+        if ($daysData['is_overdue'] && (int) $daysData['overdue_days'] > 0) {
+            $kunK = (int) $daysData['overdue_days'];
+            $q > 0.0001
+                ? $kunT = "Joriy kechikish: muddat o'tgach qoldiqqa nisbatan (kunlar)."
+                : $kunT = "Joriy kechikish: muddat o'tgach to'lov (asosiy 0 yoki to'langan).";
+        } elseif ($daysData['days_left'] > 0) {
+            $kunK = (int) $daysData['days_left'];
+            $kunT = "Oxirgi muddatgacha qolgan kunlar.";
+        } elseif ($kArxiv > 0 && $deadlineOtkan) {
+            $kunK = $kArxiv;
+            $kunJami = true;
+            $kunT = 'Jami kechikish: DB, penya hisobida. Joriy kechikish emas.';
+        }
+
+        $qoldiqOch = $daysData['is_overdue']
+            || $isCurrentMonth
+            || $tol > 0.0001
+            || $faktTushgan > 0.0001
+            || $q > 0.0001
+            || ($anyPenyaGraf && $deadlineOtkan)
+            || ($kArxiv > 0 && $deadlineOtkan);
+
+        $qatorIz = null;
+        $qoldiqUstiTitle = null;
+        if ($q <= 0.0001 && $anyPenyaGraf && $deadlineOtkan) {
+            if ($kArxiv > 0) {
+                if ($faktTushgan > 0.0001) {
+                    $qatorIz = sprintf(
+                        "Muddati o'tgan: jami %d kun kechikish (penya asosi), shu oydan tushim bor.",
+                        $kArxiv
+                    );
+                } else {
+                    $qatorIz = sprintf(
+                        "Muddati o'tgan: jami %d kun kechikish (penya asosi), shu kalendar oyda tushim yo'q; qarz reja (grafik) bo'yicha.",
+                        $kArxiv
+                    );
+                }
+            } else {
+                $qatorIz = "Penya/kechikish jadval bo'yicha.";
+            }
+        } elseif ($q > 0.0001 && $daysData['is_overdue']) {
+            $qatorIz = "Aktiv qarz, muddati o'tgan, penya qoldiqqa.";
+        } elseif ($q > 0.0001 && !$daysData['is_overdue'] && $daysData['days_left'] > 0) {
+            $qatorIz = "Muddatgacha to'lash.";
+        }
+
+        // Qarz "nomlari": fakt=0 va muddat o'tgan oylar kalendar bo'yicha qarzdor; kelajak — qarz emas, kutilayotgan.
+        $qarzKoRinishi = 'oddiy';
+        if (! $deadlineOtkan && (int) $daysData['days_left'] > 0) {
+            $qarzKoRinishi = 'kutilayotgan';
+            $qatorIz = "Hali oxirgi muddat kelmadi; hozir 'qarzdor' emas, faqat reja (kutilayotgan to'lov).";
+        } elseif ($deadlineOtkan && $faktTushgan <= 0.0001) {
+            $qarzKoRinishi = 'qarzdor_fakt';
+            if (empty($qatorIz)) {
+                $qatorIz = "Qarz: shu oydan kalendar bo'yicha tushim yo'q, grafik reja bo'yicha hisoblanadi.";
+            } elseif (! str_contains($qatorIz, "tushim yo'q") && ! str_contains($qatorIz, 'Qarz:')) {
+                $qatorIz .= " Qarz: shu oydan kalendar bo'yicha tushim yo'q, grafik reja bo'yicha hisoblanadi.";
+            }
+        }
+
+        return [
+            'kun_ko_rinishi' => $kunK,
+            'kun_ko_rinishi_izoh' => $kunT,
+            'kun_jami_akt' => $kunJami,
+            'qoldiq_hujayra_ochilishi' => $qoldiqOch,
+            'qator_izoh' => $qatorIz,
+            'qoldiq_usti_title' => $qoldiqUstiTitle,
+            'qarz_ko_rinishi' => $qarzKoRinishi,
+            'penya_rate' => $penyaRate,
         ];
     }
 
@@ -174,9 +338,10 @@ class ScheduleDisplayService
     private function detectProRata(PaymentSchedule $schedule, Contract $contract): array
     {
         $boshlanish = Carbon::parse($contract->boshlanish_sanasi);
-        $tolovSanasi = Carbon::parse($schedule->tolov_sanasi);
-
-        if (!$tolovSanasi->isSameDay($boshlanish) || $boshlanish->day === 1) {
+        if ($boshlanish->day === 1) {
+            return ['is_pro_rata' => false, 'tooltip' => null];
+        }
+        if ((int) $schedule->oy_raqami !== 1) {
             return ['is_pro_rata' => false, 'tooltip' => null];
         }
 
@@ -207,10 +372,10 @@ class ScheduleDisplayService
 
     /**
      * Calculate days left/overdue and payment date
+     * (1-grafik uchun $deadline allaqachon boshlanish sanasiga moslangan.)
      */
     private function calculateDaysAndOverdue(
         PaymentSchedule $schedule,
-        Carbon $paymentDue10th,
         Carbon $deadline,
         Carbon $today,
         bool $isCurrentMonth,
@@ -232,16 +397,20 @@ class ScheduleDisplayService
             }
         }
 
+        $todayDate = $today->copy()->startOfDay();
+        $deadlineDay = $deadline->copy()->startOfDay();
+
         // Calculate overdue status
         if ($isPaid) {
             // Fully paid schedule
             if (!$hasDebt) {
                 // Fully paid - only show days if we found a payment in this month
-                if ($paymentDate && $paymentDate->gt($paymentDue10th) && !$isCurrentMonth) {
-                    // Paid late in this month - show delay
+                if ($paymentDate && $paymentDate->copy()->startOfDay()->gt($deadlineDay) && !$isCurrentMonth) {
+                    // Paid after oxirgi muddat — kechikish
+                    $payDay = $paymentDate->copy()->startOfDay();
                     return [
                         'is_overdue' => true,
-                        'overdue_days' => $paymentDue10th->diffInDays($paymentDate),
+                        'overdue_days' => (int) $deadlineDay->diffInDays($payDay),
                         'days_left' => 0,
                         'payment_date' => $paymentDate->format('d.m.Y'),
                     ];
@@ -257,33 +426,34 @@ class ScheduleDisplayService
             }
 
             // Partially paid - show ongoing debt days
-            if ($today->gt($paymentDue10th)) {
+            if ($todayDate->gt($deadlineDay)) {
                 return [
                     'is_overdue' => true,
-                    'overdue_days' => $paymentDue10th->diffInDays($today),
+                    'overdue_days' => (int) $deadlineDay->diffInDays($todayDate),
                     'days_left' => 0,
                     'payment_date' => $paymentDate ? $paymentDate->format('d.m.Y') : null,
                 ];
             }
         }
 
-        // Unpaid schedule
-        if ($hasDebt && $today->gt($paymentDue10th)) {
-            // Overdue unpaid - show days from 10th to today
+        // Unpaid schedule: kechikish oxirgi muddatdan keyin
+        if ($hasDebt && $todayDate->gt($deadlineDay)) {
             return [
                 'is_overdue' => true,
-                'overdue_days' => $paymentDue10th->diffInDays($today),
+                'overdue_days' => (int) $deadlineDay->diffInDays($todayDate),
                 'days_left' => 0,
                 'payment_date' => null,
             ];
         }
 
-        // Future schedule or not yet due
-        $daysUntilDeadline = $today->diffInDays($deadline, false);
+        // Future schedule or not yet due (qolgan kunlar: oxirgi muddatgacha)
+        $daysUntilDeadline = $todayDate->lte($deadlineDay)
+            ? (int) $todayDate->diffInDays($deadlineDay)
+            : 0;
         return [
             'is_overdue' => false,
             'overdue_days' => 0,
-            'days_left' => max(0, $daysUntilDeadline),
+            'days_left' => $daysUntilDeadline,
             'payment_date' => null,
         ];
     }
