@@ -6,6 +6,7 @@ use App\Models\Contract;
 use App\Models\Lot;
 use App\Models\Payment;
 use App\Models\Tenant;
+use App\Services\ContractYearPeriodsService;
 use App\Services\PaymentApplicator;
 use App\Services\ScheduleDisplayService;
 use Illuminate\Http\Request;
@@ -655,43 +656,20 @@ class WebController extends Controller
 
         $stats = null;
         $currentMonth = null;
-        if ($contract) {
-            $approvedPayments = $contract->payments->where('holat', 'tasdiqlangan');
-            $realPaid = (float) $approvedPayments->sum('summa');
-
-            $refunds = $contract->payments->where('holat', 'qaytarilgan');
-            $refundSum = (float) abs($refunds->sum('summa'));
-
-            $netPaid = $realPaid - $refundSum;
-
-            $overdueDebt = $contract->paymentSchedules->filter(function ($schedule) use ($today) {
-                if ($schedule->qoldiq_summa <= 0) {
-                    return false;
-                }
-                $paymentDate = $schedule->tolov_sanasi;
-                return $paymentDate && Carbon::parse($paymentDate)->lt($today);
-            })->sum('qoldiq_summa');
-
-            $stats = [
-                'jami_summa' => (float) $contract->shartnoma_summasi,
-                'tolangan' => $netPaid,
-                'qoldiq' => (float) $overdueDebt,
-                'penya' => max(0.0,
-                    (float) $contract->paymentSchedules->sum('penya_summasi')
-                    - (float) $contract->paymentSchedules->sum('tolangan_penya')
-                ),
-                'real_payments' => $realPaid,
-                'refunds' => $refundSum,
-            ];
-
-            $currentMonth = $this->buildContractCurrentMonth($contract, $today);
-        }
-
         $scheduleService = new ScheduleDisplayService();
+        $emptySchedules = [
+            'schedules' => [],
+            'is_contract_expired' => false,
+            'reference_date' => $today->format('Y-m-d'),
+            'totals' => $scheduleService->aggregateDisplayTotals([]),
+        ];
+        $scheduleDisplayData = $emptySchedules;
+        $allSchedulesData = $emptySchedules;
+        $lotYearPeriods = $this->emptyLotYearPeriodsViewData();
+
         if ($contract) {
             $periodService = \App\Services\ContractPeriodService::forContract($contract);
             $currentPeriod = $periodService->getCurrentPeriod();
-
             $periodDates = $currentPeriod ? [
                 'start' => $currentPeriod['start'],
                 'end' => $currentPeriod['end'],
@@ -699,16 +677,69 @@ class WebController extends Controller
 
             $scheduleDisplayData = $scheduleService->getScheduleDisplayData($contract, $periodDates);
             $allSchedulesData = $scheduleService->getScheduleDisplayData($contract, null);
-        } else {
-            $empty = ['schedules' => [], 'is_contract_expired' => false, 'reference_date' => $today->format('Y-m-d')];
-            $scheduleDisplayData = $empty;
-            $allSchedulesData = $empty;
+
+            $totals = $allSchedulesData['totals'] ?? $scheduleService->aggregateDisplayTotals([]);
+
+            $approvedPayments = $contract->payments->where('holat', 'tasdiqlangan');
+            $realPaid = (float) $approvedPayments->sum('summa');
+
+            $refunds = $contract->payments->where('holat', 'qaytarilgan');
+            $refundSum = (float) abs($refunds->sum('summa'));
+
+            $netPaid = $realPaid - $refundSum;
+            $jami = (float) $contract->shartnoma_summasi;
+
+            $lotYearPeriods = (new ContractYearPeriodsService($scheduleService))->buildForContract(
+                $contract,
+                $today,
+                $allSchedulesData['schedules'] ?? [],
+                $totals
+            );
+
+            $stats = [
+                'jami_summa' => $jami,
+                'tolangan' => $netPaid,
+                'qoldiq' => (float) $totals['jami_jadval_qoldiq'],
+                'penya' => max(0.0, (float) $totals['jami_qoldiq_penya']),
+                'real_payments' => $realPaid,
+                'refunds' => $refundSum,
+                'tolangan_foiz' => $jami > 0 ? round(($netPaid / $jami) * 100, 1) : 0.0,
+                'qoldiq_izoh' => 'Barcha grafik oylar: "Qoldiq" (Grafik − fakt, kalendar) yigʻindisi.',
+                'penya_izoh' => 'Barcha grafik oylar: "Qol. penya" yigʻindisi (jadvaldagi hisob; alohida toʻlanadi).',
+            ];
+
+            $currentMonth = $this->buildContractCurrentMonth($contract, $today);
         }
 
-        return view('blade.lots.show', compact(
-            'lot', 'contract', 'stats',
-            'scheduleDisplayData', 'allSchedulesData', 'currentMonth'
-        ));
+        $viewData = array_merge(
+            compact('lot', 'contract', 'stats', 'scheduleDisplayData', 'allSchedulesData', 'currentMonth'),
+            $lotYearPeriods
+        );
+
+        return view('blade.lots.show', $viewData);
+    }
+
+    /**
+     * Lot jadvali: davrlar jadvali o‘rnatilmagan, Blade null/xavfsiz.
+     */
+    private function emptyLotYearPeriodsViewData(): array
+    {
+        return [
+            'allSchedules' => collect(),
+            'isContractExpired' => false,
+            'contractYearPeriods' => [],
+            'grandTotal' => 0.0,
+            'grandPaid' => 0.0,
+            'grandDebt' => 0.0,
+            'grandOverdue' => 0.0,
+            'grandPenya' => 0.0,
+            'grandPercent' => 0.0,
+            'grandOylikOrtacha' => 0.0,
+            'currentPeriodNum' => null,
+            'currentPeriod' => null,
+            'otherPeriods' => [],
+            'currentPeriodData' => null,
+        ];
     }
 
     /**

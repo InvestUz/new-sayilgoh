@@ -56,7 +56,56 @@ class ScheduleDisplayService
             'schedules' => $displaySchedules,
             'is_contract_expired' => $isContractExpired,
             'reference_date' => $today->format('Y-m-d'),
+            'totals' => $this->aggregateDisplayTotals($displaySchedules),
         ];
+    }
+
+    /**
+     * Jadval/bannerlar uchun: barcha qatorlar bo'yicha yig'indilar (UI = backend).
+     */
+    public function aggregateDisplayTotals(array $displayRows): array
+    {
+        $q = 0.0;
+        $penyaHisob = 0.0;
+        $tolangenPenya = 0.0;
+        $qoldiqPenya = 0.0;
+        foreach ($displayRows as $r) {
+            $q += (float) ($r['qoldiq_summa'] ?? 0);
+            $penyaHisob += (float) ($r['penya_summasi'] ?? 0);
+            $tolangenPenya += (float) ($r['tolangan_penya'] ?? 0);
+            $qoldiqPenya += (float) ($r['qoldiq_penya'] ?? 0);
+        }
+
+        return [
+            'jami_jadval_qoldiq' => $q,
+            'jami_penya_hisob' => $penyaHisob,
+            'jami_tolangen_penya' => $tolangenPenya,
+            'jami_qoldiq_penya' => $qoldiqPenya,
+        ];
+    }
+
+    /**
+     * Jadvaldagi "Qol. penya" bo'yicha: berilgan oy oralig'ida (kalendar) yig'indi.
+     *
+     * @param  array<int, array>  $displayRows  calculateScheduleDisplay qatorlari
+     */
+    public function sumQoldiqPenyaInDateRange(array $displayRows, Carbon $rangeFrom, Carbon $rangeTo): float
+    {
+        $from = $rangeFrom->copy()->startOfMonth();
+        $to = $rangeTo->copy()->endOfMonth();
+        $s = 0.0;
+        foreach ($displayRows as $r) {
+            if (!isset($r['year'], $r['month'])) {
+                continue;
+            }
+            $t = Carbon::create((int) $r['year'], (int) $r['month'], 1)->startOfMonth();
+            if ($t->lt($from) || $t->gt($to)) {
+                continue;
+            }
+            $s += (float) ($r['qoldiq_penya'] ?? 0);
+        }
+
+        return $s;
     }
 
     /**
@@ -89,6 +138,15 @@ class ScheduleDisplayService
 
         // Pro-rata aniqlash (qisman birinchi oy)
         $proRata = $this->detectProRata($schedule, $contract);
+
+        // Jadvalda ko'rinadigan "Grafik": yillik ijara bo'lsa barcha to'liq oylar bir xil oylik (yillik/12), pro-ratada — haqiqiy qator, yillik bo'lmasa — jadvaldagi oylik
+        $annualRent = (float) ($contract->yillik_ijara_haqi ?? 0);
+        $grafikKoRinish = (float) $schedule->tolov_summasi;
+        if (!empty($proRata['is_pro_rata'])) {
+            $grafikKoRinish = (float) $schedule->tolov_summasi;
+        } elseif ($annualRent > 0.0001) {
+            $grafikKoRinish = round($annualRent / 12, 0);
+        }
 
         // Calculate days and overdue status
         $daysData = $this->calculateDaysAndOverdue(
@@ -130,6 +188,9 @@ class ScheduleDisplayService
             ];
         })->all();
 
+        // Jadvaldagi "qoldiq" = max(0, grafik - fakt) — row izoh/ochilish DB qoldiq emas, shu formula
+        $qJadval = max(0.0, $grafikKoRinish - $faktTushgan);
+
         $rowMeta = $this->buildJadvalRowMeta(
             $schedule,
             $daysData,
@@ -137,14 +198,11 @@ class ScheduleDisplayService
             $deadline,
             $today,
             $isCurrentMonth,
-            $faktTushgan
+            $faktTushgan,
+            $qJadval
         );
 
         $qarzKo = $rowMeta['qarz_ko_rinishi'] ?? 'oddiy';
-        $qoldiqForDisplay = (float) $schedule->qoldiq_summa;
-        if ($qarzKo === 'qarzdor_fakt' && (float) $schedule->tolov_summasi > 0) {
-            $qoldiqForDisplay = (float) $schedule->tolov_summasi;
-        }
         if ($qarzKo === 'kutilayotgan') {
             $qoldiqForDisplay = 0.0;
             $rowMeta['qoldiq_hujayra_ochilishi'] = false;
@@ -154,6 +212,9 @@ class ScheduleDisplayService
             $rowMeta['qator_izoh'] = "Faqat reja. Oxirgi muddatgacha: qarz, penya, qolgan kun bu ustunlarda yig'ilmaydi (muddati kelayotganda alohida hisoblanadi).";
             $rowMeta['qoldiq_usti_title'] = null;
             $rowMeta['penya_rate'] = null;
+        } else {
+            // Jadval Qoldiq: reja (ko'rsatiladigan grafik) - shu kalendar oy fakt, pastki 0. Tizim ichidagi kassa (FIFO) alohida.
+            $qoldiqForDisplay = max(0.0, $grafikKoRinish - $faktTushgan);
         }
         $hasActiveDebtDisplay = $qoldiqForDisplay > 0.0001 && $daysData['is_overdue'];
 
@@ -169,11 +230,12 @@ class ScheduleDisplayService
             'is_current_month' => $isCurrentMonth,
 
             // Amounts
-            'tolov_summasi' => $schedule->tolov_summasi,
-            'tolangan_summa' => $schedule->tolangan_summa,   // FIFO orqali asosiy qarzga yo'naltirilgan
-            'fakt_tushgan' => $faktTushgan,                  // shu oyda real tushgan naqd (FIFO dan mustaqil)
-            'fakt_payments' => $faktDocs,                    // tooltip uchun to'lovlar ro'yxati
-            'qoldiq_summa' => $qoldiqForDisplay,
+            'tolov_summasi' => $schedule->tolov_summasi,     // jadval tahriri / DB
+            'grafik_ko_rinish' => $grafikKoRinish,         // ekran: bitta yillik bo'lsa yillik/12, yoki oylik (pro-rata)
+            'tolangan_summa' => $schedule->tolangan_summa,   // tizim FIFO
+            'fakt_tushgan' => $faktTushgan,                 // shu kalendar oy kassa
+            'fakt_payments' => $faktDocs,
+            'qoldiq_summa' => $qoldiqForDisplay,             // max(0, grafik_ko_rinish - fakt) yoki 0 (kutilayotgan)
 
             // Dates
             'tolov_sanasi' => $planPaymentDate->format('Y-m-d'),
@@ -231,6 +293,7 @@ class ScheduleDisplayService
      *   qarz_ko_rinishi: 'qarzdor_fakt'|'kutilayotgan'|'oddiy',
      *   penya_rate: ?string
      * }
+     * @param float $qJadval  max(0, ekran grafik - fakt) — jadval mantiq, FIFO DB dan mustaqil
      */
     private function buildJadvalRowMeta(
         PaymentSchedule $schedule,
@@ -239,10 +302,11 @@ class ScheduleDisplayService
         Carbon $deadline,
         Carbon $today,
         bool $isCurrentMonth,
-        float $faktTushgan
+        float $faktTushgan,
+        float $qJadval
     ): array {
         $kArxiv = (int) ($schedule->kechikish_kunlari ?? 0);
-        $q = (float) $schedule->qoldiq_summa;
+        $q = (float) $schedule->qoldiq_summa; // tizim (FIFO) — kechish va ba'zi DB maydonlar uchun
         $pen = (float) ($schedule->penya_summasi ?? 0);
         $penTol = (float) ($schedule->tolangan_penya ?? 0);
         $qPen = (float) ($penaltyData['qoldiq_penya'] ?? 0);
@@ -259,9 +323,9 @@ class ScheduleDisplayService
         $kunJami = false;
         if ($daysData['is_overdue'] && (int) $daysData['overdue_days'] > 0) {
             $kunK = (int) $daysData['overdue_days'];
-            $q > 0.0001
-                ? $kunT = "Joriy kechikish: muddat o'tgach qoldiqqa nisbatan (kunlar)."
-                : $kunT = "Joriy kechikish: muddat o'tgach to'lov (asosiy 0 yoki to'langan).";
+            $qJadval > 0.0001
+                ? $kunT = "Joriy kechikish: muddat o'tgach jadval qoldig'iga nisbatan (kunlar)."
+                : $kunT = "Joriy kechikish: jadval bo'yicha qoldiq 0 (tizimdagi to'lov/ FIFO boshqacha bo'lishi mumkin).";
         } elseif ($daysData['days_left'] > 0) {
             $kunK = (int) $daysData['days_left'];
             $kunT = "Oxirgi muddatgacha qolgan kunlar.";
@@ -275,13 +339,18 @@ class ScheduleDisplayService
             || $isCurrentMonth
             || $tol > 0.0001
             || $faktTushgan > 0.0001
+            || $qJadval > 0.0001
             || $q > 0.0001
             || ($anyPenyaGraf && $deadlineOtkan)
             || ($kArxiv > 0 && $deadlineOtkan);
 
         $qatorIz = null;
         $qoldiqUstiTitle = null;
-        if ($q <= 0.0001 && $anyPenyaGraf && $deadlineOtkan) {
+        if ($qJadval > 0.0001 && $daysData['is_overdue']) {
+            $qatorIz = "Jadvalda qoldiq: reja (Grafik) - shu oydan fakt. Penya alohida.";
+        } elseif ($qJadval > 0.0001 && !$daysData['is_overdue'] && $daysData['days_left'] > 0) {
+            $qatorIz = "Muddatgacha to'lash.";
+        } elseif ($qJadval <= 0.0001 && $anyPenyaGraf && $deadlineOtkan) {
             if ($kArxiv > 0) {
                 if ($faktTushgan > 0.0001) {
                     $qatorIz = sprintf(
@@ -297,23 +366,18 @@ class ScheduleDisplayService
             } else {
                 $qatorIz = "Penya/kechikish jadval bo'yicha.";
             }
-        } elseif ($q > 0.0001 && $daysData['is_overdue']) {
-            $qatorIz = "Aktiv qarz, muddati o'tgan, penya qoldiqqa.";
-        } elseif ($q > 0.0001 && !$daysData['is_overdue'] && $daysData['days_left'] > 0) {
-            $qatorIz = "Muddatgacha to'lash.";
         }
 
-        // Qarz "nomlari": fakt=0 va muddat o'tgan oylar kalendar bo'yicha qarzdor; kelajak — qarz emas, kutilayotgan.
         $qarzKoRinishi = 'oddiy';
         if (! $deadlineOtkan && (int) $daysData['days_left'] > 0) {
             $qarzKoRinishi = 'kutilayotgan';
-            $qatorIz = "Hali oxirgi muddat kelmadi; hozir 'qarzdor' emas, faqat reja (kutilayotgan to'lov).";
+            $qatorIz = "Faqat reja (kutilayotgan). Jadvalda qoldiq hisoblanmaydi.";
         } elseif ($deadlineOtkan && $faktTushgan <= 0.0001) {
             $qarzKoRinishi = 'qarzdor_fakt';
             if (empty($qatorIz)) {
-                $qatorIz = "Qarz: shu oydan kalendar bo'yicha tushim yo'q, grafik reja bo'yicha hisoblanadi.";
-            } elseif (! str_contains($qatorIz, "tushim yo'q") && ! str_contains($qatorIz, 'Qarz:')) {
-                $qatorIz .= " Qarz: shu oydan kalendar bo'yicha tushim yo'q, grafik reja bo'yicha hisoblanadi.";
+                $qatorIz = "Muddati o'tgan, shu oydan fakt tushim yo'q (jadval: reja - fakt).";
+            } elseif (! str_contains($qatorIz, 'reja - shu oydan fakt') && ! str_contains($qatorIz, "fakt tushim yo'q")) {
+                $qatorIz = trim($qatorIz . " Shu oydan fakt yo'q.");
             }
         }
 

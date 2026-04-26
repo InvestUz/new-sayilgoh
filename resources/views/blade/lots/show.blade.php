@@ -80,7 +80,7 @@ function formatLotSum($num) {
             </div>
             <p class="text-xs text-slate-400 uppercase tracking-wide font-medium">QOLDIQ</p>
             <p class="text-4xl font-bold {{ $stats['qoldiq'] > 0 ? 'text-red-400' : 'text-slate-200' }} mt-3">{!! formatLotSum($stats['qoldiq']) !!}</p>
-            <p class="text-xs text-slate-500 mt-4">Reja sanasi o‘tgan oylarning grafik qatorlaridagi qolgan asosiy yig‘indisi (barcha kelajak oylari kirmaydi)</p>
+            <p class="text-xs text-slate-500 mt-4">{{ $stats['qoldiq_izoh'] }}</p>
         </div>
 
         <!-- Penya -->
@@ -88,21 +88,20 @@ function formatLotSum($num) {
             <div class="absolute top-4 right-4 w-10 h-10 bg-red-500/10 rounded-lg flex items-center justify-center">
                 <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
             </div>
-            <p class="text-xs text-slate-400 uppercase tracking-wide font-medium">PENYA (HISOBLANGAN)</p>
+            <p class="text-xs text-slate-400 uppercase tracking-wide font-medium">PENYA (Qol. jadval)</p>
             <p class="text-4xl font-bold {{ $stats['penya'] > 0 ? 'text-red-400' : 'text-slate-200' }} mt-3">{!! formatLotSum($stats['penya']) !!}</p>
-            <p class="text-xs text-slate-500 mt-4">Kechikish jarimasi<br><span class="text-slate-600">(informatsion, alohida to'lanadi)</span></p>
+            <p class="text-xs text-slate-500 mt-4">{{ $stats['penya_izoh'] }}</p>
         </div>
     </div>
 
     <!-- Progress -->
-    @php $paidPercent = $stats['jami_summa'] > 0 ? round(($stats['tolangan'] / $stats['jami_summa']) * 100, 1) : 0; @endphp
     <div class="bg-slate-800/50 backdrop-blur rounded-xl border border-slate-700/50 p-5 mb-6">
         <div class="flex justify-between text-sm mb-3">
             <span class="font-medium text-slate-300">To'lov jarayoni</span>
-            <span class="font-bold text-white">{{ $paidPercent }}%</span>
+            <span class="font-bold text-white">{{ $stats['tolangan_foiz'] }}%</span>
         </div>
         <div class="h-3 bg-slate-700 rounded-full">
-            <div class="h-3 bg-gradient-to-r from-green-600 to-green-500 rounded-full transition-all" style="width: {{ $paidPercent }}%"></div>
+            <div class="h-3 bg-gradient-to-r from-green-600 to-green-500 rounded-full transition-all" style="width: {{ $stats['tolangan_foiz'] }}%"></div>
         </div>
     </div>
 
@@ -273,157 +272,7 @@ function formatLotSum($num) {
     </div>
 
     @if($contract)
-    @php
-        $bugun = \Carbon\Carbon::today();
-        $currentMonth = $bugun->month;
-        $currentYear = $bugun->year;
-        $currentQuarter = ceil($currentMonth / 3);
-        $contractStart = \Carbon\Carbon::parse($contract->boshlanish_sanasi);
-        $contractEnd = \Carbon\Carbon::parse($contract->tugash_sanasi);
-
-        // Check if contract is expired (tugash_sanasi < today)
-        $isContractExpired = $contractEnd->lt($bugun);
-
-        // Get all schedules sorted by date
-        $allSchedules = $contract->paymentSchedules->sortBy('tolov_sanasi');
-
-        // Build periods based on ACTUAL schedule years (calendar year approach)
-        // Group schedules by their actual year-month, then create 12-month periods
-        $contractYearPeriods = [];
-
-        if ($allSchedules->count() > 0) {
-            // Group schedules by year-month and find distinct starting points
-            $schedulesByYearMonth = $allSchedules->groupBy(function($s) {
-                return \Carbon\Carbon::parse($s->tolov_sanasi)->format('Y-m');
-            })->sortKeys();
-
-            // Get the first schedule's month as the anchor for periods
-            $firstScheduleDate = \Carbon\Carbon::parse($allSchedules->first()->tolov_sanasi);
-            $lastScheduleDate = \Carbon\Carbon::parse($allSchedules->last()->tolov_sanasi);
-
-            // Start period from the first schedule's year-month (day 1)
-            $periodStart = \Carbon\Carbon::create($firstScheduleDate->year, $firstScheduleDate->month, 1);
-            $periodNum = 1;
-
-            // Create 12-month periods until all schedules are covered
-            while ($periodStart->lte($lastScheduleDate)) {
-                $periodEnd = $periodStart->copy()->addMonths(12)->subDay();
-
-                // Get schedules for this period
-                $periodSchedules = $allSchedules->filter(function($s) use ($periodStart, $periodEnd) {
-                    $scheduleDate = \Carbon\Carbon::parse($s->tolov_sanasi);
-                    return $scheduleDate->gte($periodStart) && $scheduleDate->lte($periodEnd);
-                })->sortBy('tolov_sanasi');
-
-                // Only add period if it has schedules
-                if ($periodSchedules->count() > 0) {
-                    $periodTotal = $periodSchedules->sum('tolov_summasi');
-                    $periodPaid = $periodSchedules->sum('tolangan_summa');
-                    $periodDebt = $periodSchedules->sum('qoldiq_summa');
-
-                    // Penya (jonli hisoblash): faqat hali TO'LIQ TO'LANMAGAN grafiklarni qo'shamiz.
-                    // Aks holda qoldiq 0 bo'lgan eski `penya_summasi` qiymatlari
-                    // yig'indini sun'iy ravishda oshiradi.
-                    $periodPenalty = 0;
-                    if (!$isContractExpired) {
-                        $periodPenalty = $periodSchedules->sum(function($s) use ($bugun) {
-                            if ((float) $s->qoldiq_summa <= 0) return 0;
-                            $calc = (float) $s->calculatePenyaAtDate($bugun, false);
-                            return max(0, $calc - (float) ($s->tolangan_penya ?? 0));
-                        });
-                    }
-                    $periodPenya = max(0, $periodPenalty);
-
-                    $periodOverdue = $periodSchedules->filter(function($s) use ($bugun) {
-                        if ($s->qoldiq_summa <= 0) return false;
-                        $paymentDate = \Carbon\Carbon::parse($s->tolov_sanasi);
-                        return $paymentDate->lt($bugun);
-                    })->sum('qoldiq_summa');
-
-                    $periodPercent = $periodTotal > 0 ? round(($periodPaid / $periodTotal) * 100, 1) : 0;
-
-                    // Adjust period end to actual last schedule in this period
-                    $actualPeriodEnd = \Carbon\Carbon::parse($periodSchedules->last()->tolov_sanasi)->endOfMonth();
-
-                    $contractYearPeriods[] = [
-                        'num' => $periodNum,
-                        'start' => $periodStart->copy(),
-                        'end' => $actualPeriodEnd,
-                        'schedules' => $periodSchedules,
-                        'months' => $periodSchedules->count(),
-                        'total' => $periodTotal,
-                        'paid' => $periodPaid,
-                        'debt' => $periodDebt,
-                        'overdue' => $periodOverdue,
-                        'penya' => $periodPenya,
-                        'percent' => $periodPercent,
-                    ];
-                    $periodNum++;
-                }
-
-                $periodStart = $periodStart->copy()->addMonths(12);
-            }
-        }
-
-        // Grand totals
-        $grandTotal = $allSchedules->sum('tolov_summasi');
-
-        // Use REAL payments instead of schedules for grandPaid
-        $approvedPayments = $contract->payments->where('holat', 'tasdiqlangan');
-        $refundPayments = $contract->payments->where('holat', 'qaytarilgan');
-        $grandPaid = $approvedPayments->sum('summa') - abs($refundPayments->sum('summa')); // Real paid minus refunds
-
-        $grandDebt = max(0, $grandTotal - $grandPaid);
-
-        // Grand penalty (jonli): Shartnoma muddati tugamagan bo'lsa va grafik hali
-        // to'liq to'lanmagan bo'lsa, ``calculatePenyaAtDate`` orqali tekshiramiz.
-        $grandPenaltyRaw = 0;
-        if (!$isContractExpired) {
-            $grandPenaltyRaw = $allSchedules->sum(function($s) use ($bugun) {
-                if ((float) $s->qoldiq_summa <= 0) return 0;
-                $calc = (float) $s->calculatePenyaAtDate($bugun, false);
-                return max(0, $calc - (float) ($s->tolangan_penya ?? 0));
-            });
-        }
-        $grandPenya = max(0, $grandPenaltyRaw);
-
-        $grandOverdue = $allSchedules->filter(function($s) use ($bugun) {
-            if ($s->qoldiq_summa <= 0) return false;
-            $paymentDate = \Carbon\Carbon::parse($s->tolov_sanasi);
-            return $paymentDate->lt($bugun);
-        })->sum('qoldiq_summa');
-
-        $grandPercent = $grandTotal > 0 ? round(($grandPaid / $grandTotal) * 100, 1) : 0;
-
-        // Find current period
-        $currentPeriodNum = null;
-        $currentPeriodData = null;
-        foreach ($contractYearPeriods as $idx => $p) {
-            if ($bugun->gte($p['start']) && $bugun->lte($p['end'])) {
-                $currentPeriodNum = $p['num'];
-                $currentPeriodData = $p;
-                break;
-            }
-        }
-
-        // If no current period found, use first period
-        if (!$currentPeriodData && count($contractYearPeriods) > 0) {
-            $currentPeriodData = $contractYearPeriods[0];
-        }
-
-        // STATS: Use current period data for top cards
-        $stats = $currentPeriodData ? [
-            'jami_summa' => $currentPeriodData['total'],
-            'tolangan' => $currentPeriodData['paid'],
-            'qoldiq' => $currentPeriodData['overdue'],
-            'penya' => $currentPeriodData['penya'],
-        ] : [
-            'jami_summa' => 0,
-            'tolangan' => 0,
-            'qoldiq' => 0,
-            'penya' => 0,
-        ];
-    @endphp
+    {{-- Jadval/davrlar: WebController + ContractYearPeriodsService --}}
 
     <!-- Professional Government Dashboard Table -->
     <div class="bg-slate-800/50 backdrop-blur border border-slate-700/50 rounded-xl mb-6 overflow-hidden">
@@ -437,23 +286,6 @@ function formatLotSum($num) {
         </div>
 
         @if(count($contractYearPeriods) > 0)
-        @php
-            // Find current period for default display
-            $currentPeriod = null;
-            $otherPeriods = [];
-            foreach ($contractYearPeriods as $period) {
-                if ($period['num'] === $currentPeriodNum) {
-                    $currentPeriod = $period;
-                } else {
-                    $otherPeriods[] = $period;
-                }
-            }
-            // If no current period (e.g., contract not started yet), use first period
-            if (!$currentPeriod && count($contractYearPeriods) > 0) {
-                $currentPeriod = $contractYearPeriods[0];
-                $otherPeriods = array_slice($contractYearPeriods, 1);
-            }
-        @endphp
 
         @if($currentPeriod)
         <!-- Current Period Table -->
@@ -617,16 +449,21 @@ function formatLotSum($num) {
                 <svg :class="showDetails ? 'rotate-180' : ''" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
             </button>
             <div x-show="showDetails" x-collapse>
+                <p class="px-2 py-2 text-[10px] text-slate-400 leading-relaxed border-b border-slate-600/50">
+                    <span class="text-slate-300">Grafik</span> — oylik reja (shartnoma <span class="text-slate-300">yillik ijarasi</span> saqlangan bo‘lsa, barcha to‘liq oylar <span class="text-slate-300">bitta oylik</span> = yillik ÷ 12; 1-oy pro-ratada o‘z summasi; yillik bo‘lmasa jadvaldagi oylik).
+                    <span class="text-slate-300">Fakt</span> = shu kalendar oyda kassaga tushim.
+                    <span class="text-slate-300">Qoldiq</span> = <span class="text-slate-200">Grafik − Fakt (shu oy)</span> (0 dan past emas). Kassa tizimidagi FIFO/ avans alohida.
+                </p>
                 <table class="w-full text-xs">
                     <thead class="bg-slate-700/50 text-slate-300">
                         <tr>
                             <th class="border border-slate-600 px-2 py-1 text-center">№</th>
                             <th class="border border-slate-600 px-2 py-1 text-left">Oy</th>
                             <th class="border border-slate-600 px-2 py-1 text-center">Muddat</th>
-                            <th class="border border-slate-600 px-2 py-1 text-right">Grafik</th>
-                            <th class="border border-slate-600 px-2 py-1 text-right" title="Shu oyda naqd tushgan to'lovlar yig'indisi (FIFO taqsimotidan mustaqil)">Fakt tushgan</th>
+                            <th class="border border-slate-600 px-2 py-1 text-right" title="Oylik reja (yillik bo'lsa 12 ga bo'linib bir xil; pro-rata: o'z summasi)">Grafik</th>
+                            <th class="border border-slate-600 px-2 py-1 text-right" title="Shu kalendar oyda kassaga tushim">Fakt tushgan</th>
                             <th class="border border-slate-600 px-2 py-1 text-center">To'lov sanasi</th>
-                            <th class="border border-slate-600 px-2 py-1 text-right" title="Qoldiq: muddat o'tib, shu kalendar oyda tushim bo'lmasa — grafik reja summasi (qarz)">Qoldiq</th>
+                            <th class="border border-slate-600 px-2 py-1 text-right" title="Grafik - Fakt (shu kalendar oy)">Qoldiq</th>
                             <th class="border border-slate-600 px-2 py-1 text-center">Kun</th>
                             <th class="border border-slate-600 px-2 py-1 text-center">Stavka</th>
                             <th class="border border-slate-600 px-2 py-1 text-right">Penya hisob</th>
@@ -698,7 +535,7 @@ function formatLotSum($num) {
                                     @if(!empty($scheduleData['pro_rata_tooltip'])) title="{{ $scheduleData['pro_rata_tooltip'] }}" @endif>
                                     <template x-if="!editing">
                                         <span>
-                                            {{ number_format($scheduleData['tolov_summasi'], 0, ',', ' ') }}
+                                            {{ number_format($scheduleData['grafik_ko_rinish'] ?? $scheduleData['tolov_summasi'], 0, ',', ' ') }}
                                             @if(!empty($scheduleData['is_pro_rata']))
                                                 <span class="text-[8px] text-slate-400 ml-0.5" title="Qisman oy (pro-rata)">⊘</span>
                                             @endif
@@ -713,7 +550,7 @@ function formatLotSum($num) {
                                     @endif
                                 >{{ $ft > 0 ? '+'.number_format($ft, 0, ',', ' ') : '—' }}</td>
                                 <td class="border border-slate-600 px-2 py-1 text-center text-slate-400">{{ $lastPaymentDate ? $lastPaymentDate->format('d.m.Y') : '—' }}</td>
-                                {{-- QOLDIQ: muddat o'tib, shu oyda tushim yo'q — grafik reja (service qoldiq_summa) --}}
+                                {{-- QOLDIQ: max(0, grafik - fakt tushim) --}}
                                 <td class="border border-slate-600 px-2 py-1 text-right align-top {{ $scheduleData['qoldiq_summa'] > 0 ? 'text-red-400' : 'text-slate-200' }}"
                                     @if(!empty($scheduleData['qoldiq_usti_title'])) title="{{ e($scheduleData['qoldiq_usti_title']) }}" @endif
                                 >
@@ -784,16 +621,17 @@ function formatLotSum($num) {
                 <svg :class="showAllDetails ? 'rotate-180' : ''" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
             </button>
             <div x-show="showAllDetails" x-collapse>
+                <p class="px-2 py-2 text-[10px] text-slate-400 leading-relaxed border-b border-slate-600/50">Yuqoridagi <span class="text-slate-300">Grafik / Fakt / Qoldiq</span> qoidalari barcha oylar uchun o‘xshash: <span class="text-slate-200">Qoldiq = max(0, Grafik − Fakt)</span> (shu kalendar oy kassasi). FIFO/ avans tizimda alohida.</p>
                 <table class="w-full text-xs">
                     <thead class="bg-slate-700/50 text-slate-300">
                         <tr>
                             <th class="border border-slate-600 px-2 py-1 text-center">№</th>
                             <th class="border border-slate-600 px-2 py-1 text-left">Oy</th>
                             <th class="border border-slate-600 px-2 py-1 text-center">Muddat</th>
-                            <th class="border border-slate-600 px-2 py-1 text-right">Grafik</th>
-                            <th class="border border-slate-600 px-2 py-1 text-right" title="Shu oyda naqd tushgan to'lovlar yig'indisi (FIFO taqsimotidan mustaqil)">Fakt tushgan</th>
+                            <th class="border border-slate-600 px-2 py-1 text-right" title="Oylik reja (yillik bo'lsa 12 ga bo'linib bir xil; pro-rata: o'z summasi)">Grafik</th>
+                            <th class="border border-slate-600 px-2 py-1 text-right" title="Shu kalendar oyda kassaga tushim">Fakt tushgan</th>
                             <th class="border border-slate-600 px-2 py-1 text-center">To'lov sanasi</th>
-                            <th class="border border-slate-600 px-2 py-1 text-right" title="Qoldiq: muddat o'tib, shu kalendar oyda tushim bo'lmasa — grafik reja summasi (qarz)">Qoldiq</th>
+                            <th class="border border-slate-600 px-2 py-1 text-right" title="Grafik - Fakt (shu kalendar oy)">Qoldiq</th>
                             <th class="border border-slate-600 px-2 py-1 text-center">Kun</th>
                             <th class="border border-slate-600 px-2 py-1 text-center">Stavka</th>
                             <th class="border border-slate-600 px-2 py-1 text-right">Penya hisob</th>
@@ -863,7 +701,7 @@ function formatLotSum($num) {
                                     @if(!empty($scheduleData['pro_rata_tooltip'])) title="{{ $scheduleData['pro_rata_tooltip'] }}" @endif>
                                     <template x-if="!editing">
                                         <span>
-                                            {{ number_format($scheduleData['tolov_summasi'], 0, ',', ' ') }}
+                                            {{ number_format($scheduleData['grafik_ko_rinish'] ?? $scheduleData['tolov_summasi'], 0, ',', ' ') }}
                                             @if(!empty($scheduleData['is_pro_rata']))
                                                 <span class="text-[8px] text-slate-400 ml-0.5" title="Qisman oy (pro-rata)">⊘</span>
                                             @endif
@@ -1202,10 +1040,7 @@ function formatLotSum($num) {
                         <button type="button" @click="paymentForm.summa = {{ $grandOverdue }}" class="px-2 py-2 text-xs border border-red-300 text-red-700 rounded hover:bg-red-50">Muddati o'tgan<br><b>{{ number_format($grandOverdue, 0, ',', ' ') }}</b></button>
                         @endif
                         <button type="button" @click="paymentForm.summa = {{ $grandDebt }}" class="px-2 py-2 text-xs border border-gray-300 text-gray-700 rounded hover:bg-gray-50">To'liq qarz<br><b>{{ number_format($grandDebt, 0, ',', ' ') }}</b></button>
-                        @php
-                            $oylikOrtacha = $contract->paymentSchedules->count() > 0 ? round($grandTotal / $contract->paymentSchedules->count()) : 0;
-                        @endphp
-                        <button type="button" @click="paymentForm.summa = {{ $oylikOrtacha }}" class="px-2 py-2 text-xs border border-gray-300 text-gray-700 rounded hover:bg-gray-50">1 oylik<br><b>{{ number_format($oylikOrtacha, 0, ',', ' ') }}</b></button>
+                        <button type="button" @click="paymentForm.summa = {{ $grandOylikOrtacha }}" class="px-2 py-2 text-xs border border-gray-300 text-gray-700 rounded hover:bg-gray-50">1 oylik<br><b>{{ number_format($grandOylikOrtacha, 0, ',', ' ') }}</b></button>
                     </div>
                 </div>
 
